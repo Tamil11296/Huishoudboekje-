@@ -1,0 +1,157 @@
+{
+  "project_title": "Huishoudbudget & Bouwdepot — Multi-Household Finance & Construction SaaS",
+  "archetype": "Architectural Precision & Warm Tactical Finance (Swiss-Dutch Hybrid)",
+  "theme": {
+    "default_mode": "light",
+    "toggle_supported": true,
+    "description": "Clean, high-visibility financial dashboard with stone-grey background, crisp card contours, high contrast status signals (Emerald for reconciled/surplus, Crimson for deficit/warning), and structured cockpit widgets for construction deposits."
+  },
+  "typography": {
+    "heading_font": "Outfit, Manrope, sans-serif",
+    "body_font": "IBM Plex Sans, -apple-system, sans-serif",
+    "mono_font": "JetBrains Mono, SFMono-Regular, monospace",
+    "scale": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3": "text-lg sm:text-xl font-semibold tracking-normal",
+      "h4": "text-base sm:text-lg font-medium tracking-normal",
+      "body": "text-sm sm:text-base leading-relaxed text-slate-700 dark:text-slate-300",
+      "small_label": "text-xs uppercase tracking-widest font-semibold text-slate-500 dark:text-slate-400",
+      "currency_large": "font-mono font-bold tracking-tight text-2xl sm:text-3xl"
+    }
+  },
+  "colors": {
+    "primary": "hsl(222, 47%, 11%)",
+    "primary_foreground": "hsl(0, 0%, 98%)",
+    "surface": "hsl(210, 20%, 98%)",
+    "surface_card": "hsl(0, 0%, 100%)",
+    "border_subtle": "hsl(214, 32%, 91%)",
+    "emerald_surplus": {
+      "bg": "bg-emerald-50 dark:bg-emerald-950/40",
+      "border": "border-emerald-200 dark:border-emerald-800",
+      "text": "text-emerald-700 dark:text-emerald-300",
+      "badge": "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200"
+    },
+    "crimson_warning": {
+      "bg": "bg-rose-50 dark:bg-rose-950/40",
+      "border": "border-rose-200 dark:border-rose-800",
+      "text": "text-rose-700 dark:text-rose-300",
+      "badge": "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200"
+    },
+    "amber_prognosis": {
+      "bg": "bg-amber-50 dark:bg-amber-950/40",
+      "border": "border-amber-200 dark:border-amber-800",
+      "text": "text-amber-800 dark:text-amber-300",
+      "badge": "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+    },
+    "chart_palette": [
+      "#0f172a",
+      "#059669",
+      "#0284c7",
+      "#d97706",
+      "#7c3aed"
+    ]
+  },
+  "visual_enhancers": {
+    "card_style": "bg-card text-card-foreground rounded-xl border border-border shadow-sm hover:shadow-md transition-shadow duration-200 p-6",
+    "cockpit_style": "relative overflow-hidden bg-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-slate-800",
+    "control_check_banner": "flex items-center justify-between p-4 rounded-lg border font-mono text-sm font-semibold transition-all duration-200",
+    "active_glow": "shadow-[0_0_15px_rgba(16,185,129,0.15)]",
+    "glass_nav": "backdrop-blur-md bg-white/80 dark:bg-slate-950/80 border-b border-slate-200/80 dark:border-slate-800/80 sticky top-0 z-50"
+  },
+  "grids": {
+    "dashboard_grid": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6",
+    "bouwdepot_cockpit_grid": "grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4",
+    "split_view_grid": "grid grid-cols-1 lg:grid-cols-3 gap-6",
+    "tables_grid": "w-full overflow-x-auto rounded-lg border border-border"
+  },
+  "layouts": {
+    "app_shell": "min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1",
+    "header_nav": "flex items-center justify-between h-16 px-4 sm:px-8 max-w-7xl mx-auto w-full",
+    "footer": "border-t border-border py-8 text-center text-xs text-muted-foreground"
+  },
+  "key_components": {
+    "Header": {
+      "path": "src/components/Navigation/Header.js",
+      "features": ["Household Switcher", "Language Switcher (NL/EN)", "Theme Toggle", "Partner Invite Trigger", "Navigation Links (Dashboard, Inkomsten & Lasten, Bouwdepot, Instellingen)"],
+      "data_testid": "main-navigation-header"
+    },
+    "BouwdepotCockpit": {
+      "path": "src/components/Bouwdepot/BouwdepotCockpit.js",
+      "features": ["Start Amount", "Paid Out", "Submitted Not Paid", "Still to Submit", "Freely Available Balance", "Days Remaining Widget"],
+      "data_testid": "bouwdepot-cockpit-widget"
+    },
+    "ControlCheckPanel": {
+      "path": "src/components/Common/ControlCheckPanel.js",
+      "features": ["Controle = €0 validation indicator", "Reconciled status badge (Green €0)", "Discrepancy warning banner (Red €X offset)"],
+      "data_testid": "control-check-warning-panel"
+    },
+    "PerPersonSplitCard": {
+      "path": "src/components/Budget/PerPersonSplitCard.js",
+      "features": ["Individual Income vs Share", "Wat houden we over? net surplus per person", "Split rule toggle (50/50 or proportional by income)"],
+      "data_testid": "per-person-split-card"
+    },
+    "BouwpostenTable": {
+      "path": "src/components/Bouwdepot/BouwpostenTable.js",
+      "features": ["Item (Keuken/Badkamer/Tuin)", "Budgeted vs Quote vs Invoiced vs Paid", "Variance progress bar", "Invoice attachment modal trigger"],
+      "data_testid": "bouwposten-table"
+    }
+  },
+  "motion": {
+    "framer_motion_used": true,
+    "card_hover": "whileHover={{ y: -2 }} transition={{ duration: 0.2 }}",
+    "tab_switch": "layout transition: { type: 'spring', stiffness: 350, damping: 30 }",
+    "toast": "sonner notifications for invoice logging, budget edits, partner invites"
+  },
+  "accessibility": {
+    "wcag_level": "AA",
+    "contrast_ratio_min": "4.5:1 for body, 3:1 for headers",
+    "keyboard_navigation": "Full focus-visible outline ring-2 ring-slate-900 dark:ring-slate-100",
+    "screen_readers": "aria-label on all interactive buttons and language switches"
+  },
+  "media": {
+    "image_urls": [
+      {
+        "category": "hero_house_construction",
+        "description": "Architectural modern house construction sample for Bouwdepot hero & demo banner",
+        "url": "https://images.unsplash.com/photo-1564703048291-bcf7f001d83d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHw0fHxtb2Rlcm4lMjBhcmNoaXRlY3R1cmFsJTIwaG91c2UlMjBjb25zdHJ1Y3Rpb24lMjB3b29kJTIwbWluaW1hbHxlbnwwfHx8fDE3OTA0Mzc4Njl8MA&ixlib=rb-4.1.0&q=85"
+      },
+      {
+        "category": "construction_wood_detail",
+        "description": "Minimal architectural texture for empty states and zero-balance cards",
+        "url": "https://images.unsplash.com/photo-1691425700585-c108acad6467?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwzfHxtb2Rlcm4lMjBhcmNoaXRlY3R1cmFsJTIwaG91c2UlMjBjb25zdHJ1Y3Rpb24lMjB3b29kJTIwbWluaW1hbHxlbnwwfHx8fDE3OTA0Mzc4Njl8MA&ixlib=rb-4.1.0&q=85"
+      }
+    ]
+  },
+  "3d_and_creative": {
+    "recharts_enabled": true,
+    "chart_types": ["BarChart for Actual vs Forecast months", "PieChart for Category Breakdown", "AreaChart for Cumulative Bouwdepot Drawdown"],
+    "micro_interactions": ["Confetti animation on 100% Bouwdepot reconciliation", "Smooth progress bar fills"]
+  },
+  "instructions_to_main_agent": [
+    "Ensure ALL interactive elements (buttons, inputs, select dropdowns, tables, cards, language toggles, tab triggers) have unique kebab-case data-testid attributes.",
+    "Implement full Dutch (NL) and English (EN) language switch using react-i18next or lightweight state dictionary covering all terms (Inkomsten, Vaste Lasten, Variabele Lasten, Overschot, Tekort, Bouwdepot, Bouwposten, Controle = €0).",
+    "Support a pre-populated Demo Household mode with sample Dutch budget and Bouwdepot data so users can test immediately.",
+    "Implement the 'Wat houden we over?' per-person calculation allowing 50/50 split or proportional income split (Robeson, Miraja, Gezamenlijk).",
+    "Construct the Bouwdepot Cockpit with clear high-impact visual meters: Start Bedrag, Uitbetaald, ingediend nog niet betaald, Nog in te dienen, Vrij besteedbaar saldo, and Resterende dagen.",
+    "Strictly enforce the Control Check rule ('Controle = €0'). Display a prominent green badge when balanced and a alert banner with red warning when off.",
+    "Use Shadcn UI components customized with custom CSS variables and Tailwind classes. NEVER rely on raw HTML select or standard native inputs for core financial forms.",
+    "DO NOT use transparent backgrounds for dropdowns, modals, or navigation headers. Ensure proper blur and solid background overlays."
+  ],
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "You tend to converge toward generic, 'on distribution' outputs. Avoid this: make creative, distinctive frontends that surprise and delight.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Don't make generic centered layouts, simplistic gradients, and uniform styling.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur) on navigation bars.",
+    "You MUST NOT apply universal transition (transition: all). Always add transitions for specific interactive elements like button, input excluding transforms.",
+    "You MUST NOT center align the app container. Do not add text-align: center to the root app container.",
+    "Always use modern button styles like pill-shaped, or sharp button with interaction animations & color relevant to the app style.",
+    "NEVER use AI assistant Emoji characters like 🤖🧠💭💡🔮🎯 for icons. Use lucide-react icons.",
+    "Every interaction needs micro-animations - hover states, transitions, and entrance animations.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "All key elements MUST include data-testid attribute for stable testing.",
+    "Use sonner for toast notifications."
+  ]
+}

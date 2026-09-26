@@ -1,0 +1,292 @@
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { motion } from "framer-motion";
+import { toast } from "sonner";
+import {
+  Plus, Pencil, Trash2, Wallet, Banknote, Send, FileClock, PiggyBank, CalendarClock,
+} from "lucide-react";
+import api from "@/lib/api";
+import { eur, apiErr } from "@/lib/format";
+import { useApp } from "@/context/AppContext";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import RecordDialog from "@/components/RecordDialog";
+import ControlCheckPanel from "@/components/ControlCheckPanel";
+
+function Metric({ icon: Icon, label, value, accent }) {
+  return (
+    <div className="rounded-xl bg-white/5 border border-white/10 p-4">
+      <div className="flex items-center gap-2 text-slate-400 text-xs uppercase tracking-wider font-semibold">
+        <Icon className="h-4 w-4" /> {label}
+      </div>
+      <div className={`font-num font-bold text-xl sm:text-2xl mt-2 ${accent || "text-white"}`}>{value}</div>
+    </div>
+  );
+}
+
+export default function BouwdepotPage() {
+  const { t, currentId, currentHousehold } = useApp();
+  const [summary, setSummary] = useState(null);
+  const [depotId, setDepotId] = useState(null);
+  const [dialog, setDialog] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!currentId) return;
+    const { data } = await api.get(`/households/${currentId}/bouwdepot-summary`);
+    setSummary(data);
+    setDepotId((prev) => (prev && data.depots.some((d) => d.bouwdepot_id === prev) ? prev : data.depots[0]?.bouwdepot_id || null));
+  }, [currentId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const depot = useMemo(
+    () => summary?.depots.find((d) => d.bouwdepot_id === depotId) || null,
+    [summary, depotId]
+  );
+  const posts = depot?.posts || [];
+  const invoices = (summary?.invoices || []).filter((i) => i.bouwdepot_id === depotId);
+  const rawPosts = (summary?.bouwposten || []).filter((b) => b.bouwdepot_id === depotId);
+
+  const cats = currentHousehold?.categories?.bouwpost || [];
+  const statuses = currentHousehold?.quote_statuses || ["ontvangen", "geaccepteerd"];
+
+  const postOpts = rawPosts.map((b) => ({ value: b.bouwpost_id, label: b.name }));
+  const postName = useMemo(() => {
+    const m = {};
+    rawPosts.forEach((b) => (m[b.bouwpost_id] = b.name));
+    return m;
+  }, [rawPosts]);
+
+  const configs = {
+    depot: {
+      path: "bouwdepots", id: "bouwdepot_id", title: t("add_depot"),
+      fields: [
+        { name: "name", label: t("bouwdepot"), type: "text", required: true },
+        { name: "start_amount", label: t("start_amount"), type: "number", required: true },
+        { name: "start_date", label: t("start_date"), type: "date" },
+        { name: "end_date", label: t("deposit_end"), type: "date" },
+      ],
+      extra: { active: true },
+    },
+    bouwpost: {
+      path: "bouwposten", id: "bouwpost_id", title: t("add_bouwpost"),
+      fields: [
+        { name: "name", label: t("bouwposten"), type: "text", required: true },
+        { name: "category", label: t("category"), type: "select", options: cats.map((c) => ({ value: c, label: c })) },
+        { name: "budget", label: t("budget"), type: "number", required: true },
+      ],
+      extra: { bouwdepot_id: depotId },
+    },
+    invoice: {
+      path: "invoices", id: "invoice_id", title: t("add_invoice"),
+      fields: [
+        { name: "supplier", label: t("supplier"), type: "text", required: true },
+        { name: "bouwpost_id", label: t("bouwposten"), type: "select", options: postOpts, required: true },
+        { name: "type", label: t("type"), type: "select", options: [{ value: "offerte", label: t("offerte") }, { value: "factuur", label: t("factuur") }], default: "offerte", required: true },
+        { name: "amount_incl_vat", label: t("amount_incl_vat"), type: "number", required: true },
+        { name: "status", label: t("status"), type: "select", options: statuses.map((s) => ({ value: s, label: t(s) })), default: "ontvangen" },
+        { name: "valid_until", label: t("valid_until"), type: "date" },
+        { name: "invoice_amount", label: t("invoice_amount"), type: "number" },
+        { name: "submitted_to_bank", label: t("submitted_to_bank"), type: "switch" },
+        { name: "submitted_on", label: t("submitted_to_bank"), type: "date" },
+        { name: "paid_on", label: t("paid_on"), type: "date" },
+        { name: "description", label: t("description"), type: "text" },
+      ],
+      extra: { bouwdepot_id: depotId },
+    },
+  };
+
+  const save = async (kind, values) => {
+    const cfg = configs[kind];
+    const payload = { ...values, ...cfg.extra };
+    try {
+      if (dialog?.initial) await api.put(`/households/${currentId}/${cfg.path}/${dialog.initial[cfg.id]}`, payload);
+      else await api.post(`/households/${currentId}/${cfg.path}`, payload);
+      toast.success(t("save"));
+      load();
+    } catch (e) { toast.error(apiErr(e)); }
+  };
+
+  const del = async (kind, item) => {
+    const cfg = configs[kind];
+    await api.delete(`/households/${currentId}/${cfg.path}/${item[cfg.id]}`);
+    toast.success(t("delete"));
+    load();
+  };
+
+  const openDialog = (kind, initial = null) => setDialog({ kind, initial });
+
+  if (!summary) return <div className="text-muted-foreground">{t("loading")}</div>;
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight">{t("nav_bouwdepot")}</h1>
+          <p className="text-muted-foreground mt-1">{currentHousehold?.name}</p>
+        </div>
+        <div className="flex gap-2">
+          {summary.depots.length > 0 && (
+            <Select value={depotId || ""} onValueChange={setDepotId}>
+              <SelectTrigger className="w-48" data-testid="depot-select"><SelectValue placeholder={t("bouwdepot")} /></SelectTrigger>
+              <SelectContent>
+                {summary.depots.map((d) => (
+                  <SelectItem key={d.bouwdepot_id} value={d.bouwdepot_id}>{d.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button variant="outline" className="gap-1 rounded-full" onClick={() => openDialog("depot")} data-testid="add-depot-btn">
+            <Plus className="h-4 w-4" /> {t("add_depot")}
+          </Button>
+        </div>
+      </div>
+
+      {!depot ? (
+        <Card className="p-10 text-center text-muted-foreground">{t("none_yet")}</Card>
+      ) : (
+        <>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="relative overflow-hidden bg-slate-900 text-white rounded-2xl p-6 sm:p-8 shadow-xl border border-slate-800"
+            data-testid="bouwdepot-cockpit-widget"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-6">
+              <h2 className="font-heading text-xl font-bold">{depot.name}</h2>
+              <Badge className="bg-white/10 text-white border-white/20">
+                {t("deposit_end")}: {depot.end_date || "—"}
+              </Badge>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              <Metric icon={Wallet} label={t("start_amount")} value={eur(depot.start_amount)} />
+              <Metric icon={Banknote} label={t("paid_out")} value={eur(depot.paid_out)} />
+              <Metric icon={Send} label={t("submitted_not_paid")} value={eur(depot.submitted_not_paid)} accent="text-amber-300" />
+              <Metric icon={FileClock} label={t("still_to_submit")} value={eur(depot.still_to_submit)} accent="text-amber-300" />
+              <Metric icon={PiggyBank} label={t("freely_available")} value={eur(depot.freely_available)} accent={depot.freely_available >= 0 ? "text-emerald-300" : "text-rose-300"} />
+              <Metric icon={CalendarClock} label={t("days_remaining")} value={depot.days_remaining != null ? depot.days_remaining : "—"} />
+            </div>
+          </motion.div>
+
+          <ControlCheckPanel checks={depot.checks} reconciled={depot.reconciled} />
+
+          <Card className="p-0 overflow-hidden">
+            <div className="flex items-center justify-between p-5">
+              <div>
+                <h2 className="font-heading text-lg font-semibold">{t("bouwposten")}</h2>
+                <p className="text-xs text-muted-foreground">
+                  {t("total_budget")}: {eur(depot.total_budget)} · {t("total_commitment")}: {eur(depot.total_commitment)}
+                </p>
+              </div>
+              <Button size="sm" className="gap-1 rounded-full" onClick={() => openDialog("bouwpost")} data-testid="add-bouwpost-btn">
+                <Plus className="h-4 w-4" /> {t("add")}
+              </Button>
+            </div>
+            <div className="w-full overflow-x-auto">
+              <Table data-testid="bouwposten-table">
+                <TableHeader><TableRow>
+                  <TableHead>{t("bouwposten")}</TableHead>
+                  <TableHead className="text-right">{t("budget")}</TableHead>
+                  <TableHead className="text-right">{t("accepted_quotes")}</TableHead>
+                  <TableHead className="text-right">{t("invoiced")}</TableHead>
+                  <TableHead className="text-right">{t("paid")}</TableHead>
+                  <TableHead className="text-right">{t("commitment")}</TableHead>
+                  <TableHead className="text-right">{t("room")}</TableHead>
+                  <TableHead className="w-40">%</TableHead>
+                  <TableHead className="w-24">{t("actions")}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {posts.map((p) => {
+                    const raw = rawPosts.find((b) => b.bouwpost_id === p.bouwpost_id) || p;
+                    const usage = p.budget > 0 ? Math.min((p.commitment / p.budget) * 100, 100) : 0;
+                    return (
+                      <TableRow key={p.bouwpost_id} data-testid={`bouwpost-row-${p.bouwpost_id}`}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell className="text-right font-num">{eur(p.budget)}</TableCell>
+                        <TableCell className="text-right font-num">{eur(p.accepted_quotes)}</TableCell>
+                        <TableCell className="text-right font-num">{eur(p.invoiced)}</TableCell>
+                        <TableCell className="text-right font-num">{eur(p.paid)}</TableCell>
+                        <TableCell className="text-right font-num">{eur(p.commitment)}</TableCell>
+                        <TableCell className={`text-right font-num font-semibold ${p.room >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(p.room)}</TableCell>
+                        <TableCell><Progress value={usage} className="h-2" /></TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openDialog("bouwpost", raw)}><Pencil className="h-4 w-4" /></Button>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => del("bouwpost", raw)}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                  {!posts.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">{t("none_yet")}</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+
+          <Card className="p-0 overflow-hidden">
+            <div className="flex items-center justify-between p-5">
+              <h2 className="font-heading text-lg font-semibold">{t("invoices")}</h2>
+              <Button size="sm" className="gap-1 rounded-full" onClick={() => openDialog("invoice")} data-testid="add-invoice-btn">
+                <Plus className="h-4 w-4" /> {t("add")}
+              </Button>
+            </div>
+            <div className="w-full overflow-x-auto">
+              <Table data-testid="invoices-table">
+                <TableHeader><TableRow>
+                  <TableHead>{t("supplier")}</TableHead><TableHead>{t("bouwposten")}</TableHead>
+                  <TableHead>{t("type")}</TableHead><TableHead>{t("status")}</TableHead>
+                  <TableHead className="text-right">{t("amount_incl_vat")}</TableHead>
+                  <TableHead className="text-right">{t("invoice_amount")}</TableHead>
+                  <TableHead>{t("submitted_to_bank")}</TableHead><TableHead>{t("paid_on")}</TableHead>
+                  <TableHead className="w-24">{t("actions")}</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {invoices.map((r) => (
+                    <TableRow key={r.invoice_id} data-testid={`invoice-row-${r.invoice_id}`}>
+                      <TableCell className="font-medium">{r.supplier}</TableCell>
+                      <TableCell>{postName[r.bouwpost_id] || <span className="text-rose-600">?</span>}</TableCell>
+                      <TableCell><Badge variant="secondary">{t(r.type === "factuur" ? "factuur" : "offerte")}</Badge></TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status === "geaccepteerd" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{t(r.status)}</span>
+                      </TableCell>
+                      <TableCell className="text-right font-num">{eur(r.amount_incl_vat)}</TableCell>
+                      <TableCell className="text-right font-num">{r.invoice_amount ? eur(r.invoice_amount) : "—"}</TableCell>
+                      <TableCell>{r.submitted_to_bank ? <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">{r.submitted_on || "✓"}</Badge> : "—"}</TableCell>
+                      <TableCell className="font-num">{r.paid_on || "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openDialog("invoice", r)}><Pencil className="h-4 w-4" /></Button>
+                          <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => del("invoice", r)}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {!invoices.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">{t("none_yet")}</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </>
+      )}
+
+      {dialog && (
+        <RecordDialog
+          open={!!dialog}
+          onOpenChange={(o) => !o && setDialog(null)}
+          title={configs[dialog.kind].title}
+          fields={configs[dialog.kind].fields}
+          initial={dialog.initial}
+          onSubmit={(v) => save(dialog.kind, v)}
+          testid={`dialog-${dialog.kind}`}
+        />
+      )}
+    </div>
+  );
+}
