@@ -6,15 +6,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { Sparkles } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useApp } from "@/context/AppContext";
 
-export default function RecordDialog({ open, onOpenChange, title, fields, initial, onSubmit, testid }) {
+export default function RecordDialog({ open, onOpenChange, title, fields, initial, onSubmit, testid, suggest }) {
   const { t } = useApp();
   const [values, setValues] = useState({});
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -80,6 +82,19 @@ export default function RecordDialog({ open, onOpenChange, title, fields, initia
             </div>
           ))}
           <DialogFooter className="gap-2">
+            {suggest && (
+              <Button type="button" variant="outline" className="gap-1 mr-auto" disabled={suggesting}
+                data-testid={`${testid}-suggest`}
+                onClick={async () => {
+                  setSuggesting(true);
+                  try {
+                    const upd = await suggest(values);
+                    if (upd) setValues((p) => ({ ...p, ...upd }));
+                  } finally { setSuggesting(false); }
+                }}>
+                <Sparkles className="h-4 w-4" /> {suggesting ? t("ai_thinking") : t("ai_suggest")}
+              </Button>
+            )}
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t("cancel")}
             </Button>

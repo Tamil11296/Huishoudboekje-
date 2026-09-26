@@ -1,4 +1,6 @@
 import os
+import io
+import json
 import logging
 from datetime import datetime, timezone
 from fastapi import FastAPI, APIRouter, Depends, HTTPException, Body, Response
@@ -7,10 +9,11 @@ from starlette.middleware.cors import CORSMiddleware
 from deps import db, get_current_user, new_id, hash_password, verify_password, log_change, public_user
 from auth import router as auth_router
 from calc import (compute_dashboard, compute_bouwdepot_summary, compute_bouwpost_rollup,
-                  compute_projects_summary)
+                  compute_projects_summary, compute_pots_summary)
 from emailer import send_email, invite_email_html
-from seed_data import seed_demo, ensure_demo_projects
+from seed_data import seed_demo, ensure_demo_projects, ensure_demo_pots
 from export import build_excel, build_pdf
+from llm import ask_claude
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -261,7 +264,10 @@ register_crud("bouwposten", "bouwposten", "bouwpost_id", "bp",
 register_crud("invoices", "invoices", "invoice_id", "inv",
               ["supplier", "bouwpost_id", "bouwdepot_id", "type", "amount_incl_vat",
                "valid_until", "status", "invoice_amount", "submitted_to_bank",
-               "submitted_on", "paid_on", "description"])
+               "submitted_on", "paid_on", "description",
+               "parent_quote_id", "termijn", "due_date", "paid_amount"])
+register_crud("pots", "pots", "pot_id", "pot",
+              ["name", "monthly_amount", "categories", "note"])
 register_crud("projects", "projects", "project_id", "proj",
               ["name", "target_date", "already_saved", "note"])
 register_crud("project-items", "project_items", "item_id", "pit",
@@ -341,6 +347,128 @@ async def export_household(hid: str, fmt: str, user: dict = Depends(get_current_
                     headers={"Content-Disposition": f'attachment; filename="{fn}"'})
 
 
+# ---------- potjes (envelope budget) ----------
+@api_router.get("/households/{hid}/pots-summary")
+async def pots_summary(hid: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    now = datetime.now(timezone.utc)
+    year = hh.get("dashboard_year") or now.year
+    cur_month = now.month if year == now.year else (12 if year < now.year else 0)
+    variable = await db.variable_expenses.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    res = compute_pots_summary(pots, variable, year, cur_month, cur_month)
+    incomes = await db.incomes.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    dash = compute_dashboard(hh, incomes, fixed, variable, year)
+    avg = dash["annual"].get("avg_monthly_over", 0)
+    res["avg_monthly_over"] = avg
+    res["free_surplus"] = round(avg - res["total_monthly"], 2)
+    return res
+
+
+# ---------- AI assistant (Claude) ----------
+async def _ai_context(hid, hh):
+    now = datetime.now(timezone.utc)
+    year = hh.get("dashboard_year") or now.year
+    incomes = await db.incomes.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    variable = await db.variable_expenses.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    dash = compute_dashboard(hh, incomes, fixed, variable, year)
+    a = dash["annual"]
+    depots = await db.bouwdepots.find({"household_id": hid}, {"_id": 0}).to_list(100)
+    bouwposten = await db.bouwposten.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    depsum = [compute_bouwdepot_summary(d, bouwposten, invoices) for d in depots]
+    variable2 = variable
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    cur_month = now.month if year == now.year else (12 if year < now.year else 0)
+    potsum = compute_pots_summary(pots, variable2, year, cur_month, cur_month)
+    L = [f"Huishouden '{hh['name']}', valuta EUR, dashboardjaar {year}. Vandaag: {now.date().isoformat()}.",
+         f"Jaartotaal: inkomen €{a['income']}, totale lasten €{a['expenses']}, over €{a['over']}, "
+         f"spaarquote {a['savings_rate']}%, gemiddeld €{a['avg_monthly_over']} per maand over.",
+         "Uitgaven per categorie (jaar): " + ", ".join(f"{k} €{v}" for k, v in dash["expense_by_category"].items())]
+    pp = ", ".join(f"{p['name']} houdt €{dash['per_person_year'][p['person_id']]['net']} over (jaar)"
+                   for p in dash["persons"])
+    if pp:
+        L.append("Per persoon: " + pp)
+    for d in depsum:
+        L.append(f"Bouwdepot '{d['name']}': start €{d['start_amount']}, uitbetaald €{d['paid_out']}, "
+                 f"vrij besteedbaar €{d['freely_available']}, dagen resterend {d['days_remaining']}.")
+    if potsum["pots"]:
+        L.append("Potjes: " + ", ".join(f"{p['name']} saldo €{p['balance']} (€{p['monthly_amount']}/mnd)"
+                                         for p in potsum["pots"]))
+    return "\n".join(L)
+
+
+def _parse_json_list(raw):
+    try:
+        s = raw[raw.index("["):raw.rindex("]") + 1]
+        return [str(x) for x in json.loads(s)][:5]
+    except Exception:
+        return [ln.strip("-•* ").strip() for ln in raw.splitlines() if ln.strip()][:3]
+
+
+def _parse_json_obj(raw):
+    try:
+        return json.loads(raw[raw.index("{"):raw.rindex("}") + 1])
+    except Exception:
+        return {}
+
+
+@api_router.post("/households/{hid}/ai/chat")
+async def ai_chat(hid: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    message = (body.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Leeg bericht")
+    session_id = body.get("session_id") or new_id("chat")
+    context = await _ai_context(hid, hh)
+    history = await db.ai_messages.find({"household_id": hid, "session_id": session_id}, {"_id": 0}) \
+        .sort("ts", 1).to_list(12)
+    hist_txt = "\n".join(f"{m['role']}: {m['content']}" for m in history[-8:])
+    system = ("Je bent een behulpzame Nederlandse financiële assistent voor dit huishouden. "
+              "Antwoord kort en concreet in het Nederlands, met euro-bedragen. Baseer je uitsluitend op de "
+              "cijfers hieronder; verzin geen getallen. Als iets niet uit de data blijkt, zeg dat eerlijk.\n\n"
+              "=== CIJFERS ===\n" + context)
+    prompt = (f"Gesprek tot nu toe:\n{hist_txt}\n\n" if hist_txt else "") + f"Vraag: {message}"
+    reply = await ask_claude(f"{hid}:{session_id}", system, prompt)
+    ts = datetime.now(timezone.utc).isoformat()
+    await db.ai_messages.insert_many([
+        {"household_id": hid, "session_id": session_id, "role": "user", "content": message, "ts": ts},
+        {"household_id": hid, "session_id": session_id, "role": "assistant", "content": reply, "ts": ts},
+    ])
+    return {"reply": reply, "session_id": session_id}
+
+
+@api_router.post("/households/{hid}/ai/insights")
+async def ai_insights(hid: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    context = await _ai_context(hid, hh)
+    system = ("Je bent een Nederlandse financiële coach. Geef op basis van de cijfers 3 korte, concrete "
+              "observaties of bespaartips (elk max 20 woorden). Antwoord ALLEEN met een JSON-array van "
+              "strings, niets anders.\n\n=== CIJFERS ===\n" + context)
+    raw = await ask_claude(new_id("ins"), system, "Geef de 3 tips als JSON array van strings.")
+    return {"tips": _parse_json_list(raw)}
+
+
+@api_router.post("/households/{hid}/ai/categorize")
+async def ai_categorize(hid: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    desc = (body.get("description") or "").strip()
+    if not desc:
+        raise HTTPException(status_code=400, detail="Geef een omschrijving")
+    expense_cats = hh.get("categories", {}).get("expense", [])
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    pot_names = [p["name"] for p in pots]
+    system = ("Je bepaalt de beste uitgavencategorie en (optioneel) potje voor een uitgave in een Nederlands "
+              f"huishoudboekje. Kies de categorie UITSLUITEND uit deze lijst: {expense_cats}. "
+              f"Kies het potje uit: {pot_names} of gebruik null. "
+              'Antwoord ALLEEN met JSON: {"category": "...", "pot": "... of null"}.')
+    raw = await ask_claude(new_id("cat"), system, f"Uitgave: {desc} (bedrag: €{body.get('amount', '?')})")
+    data = _parse_json_obj(raw)
+    return {"category": data.get("category"), "pot": data.get("pot")}
+
+
 # ---------- app wiring ----------
 app.include_router(auth_router)
 app.include_router(api_router)
@@ -377,6 +505,7 @@ async def startup():
         demo = await db.households.find_one({"owner_id": owner["user_id"], "demo": True}, {"_id": 0})
         if demo:
             await ensure_demo_projects(db, demo["household_id"])
+            await ensure_demo_pots(db, demo["household_id"])
 
 
 @app.on_event("shutdown")

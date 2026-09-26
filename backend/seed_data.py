@@ -129,6 +129,22 @@ async def seed_demo(db, owner):
     await db.invoices.insert_many(invoices)
 
 
+async def ensure_demo_pots(db, hid):
+    """Idempotently add demo envelope pots linked to variable-expense categories."""
+    if await db.pots.find_one({"household_id": hid}):
+        return
+    await db.pots.insert_many([
+        {"pot_id": new_id("pot"), "household_id": hid, "name": "Boodschappen extra",
+         "monthly_amount": 150, "categories": ["Boodschappen"], "note": ""},
+        {"pot_id": new_id("pot"), "household_id": hid, "name": "Etentjes & uitjes",
+         "monthly_amount": 200, "categories": ["Uit eten"], "note": ""},
+        {"pot_id": new_id("pot"), "household_id": hid, "name": "Kleding",
+         "monthly_amount": 120, "categories": ["Kleding"], "note": ""},
+        {"pot_id": new_id("pot"), "household_id": hid, "name": "Vervoer",
+         "monthly_amount": 80, "categories": ["Vervoer"], "note": ""},
+    ])
+
+
 async def ensure_demo_projects(db, hid):
     """Idempotently add a demo savings project (e.g. baby) to the demo household."""
     if await db.projects.find_one({"household_id": hid}):

@@ -21,6 +21,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import RecordDialog from "@/components/RecordDialog";
+import InvoiceDialog from "@/components/InvoiceDialog";
 import ControlCheckPanel from "@/components/ControlCheckPanel";
 
 function Metric({ icon: Icon, label, value, accent }) {
@@ -66,6 +67,12 @@ export default function BouwdepotPage() {
     rawPosts.forEach((b) => (m[b.bouwpost_id] = b.name));
     return m;
   }, [rawPosts]);
+  const offertes = invoices.filter((i) => i.type === "offerte");
+  const quoteById = useMemo(() => {
+    const m = {};
+    invoices.forEach((i) => { if (i.type === "offerte") m[i.invoice_id] = i.supplier; });
+    return m;
+  }, [invoices]);
 
   const configs = {
     depot: {
@@ -262,26 +269,41 @@ export default function BouwdepotPage() {
             <div className="w-full overflow-x-auto">
               <Table data-testid="invoices-table">
                 <TableHeader><TableRow>
-                  <TableHead>{t("supplier")}</TableHead><TableHead>{t("bouwposten")}</TableHead>
-                  <TableHead>{t("type")}</TableHead><TableHead>{t("status")}</TableHead>
+                  <TableHead>{t("supplier")}</TableHead>
+                  <TableHead>{t("bouwposten")}</TableHead>
+                  <TableHead>{t("type")}</TableHead>
+                  <TableHead>{t("status")}</TableHead>
                   <TableHead className="text-right">{t("amount_incl_vat")}</TableHead>
-                  <TableHead className="text-right">{t("invoice_amount")}</TableHead>
-                  <TableHead>{t("submitted_to_bank")}</TableHead><TableHead>{t("paid_on")}</TableHead>
+                  <TableHead className="text-right">{t("expected_amount")}</TableHead>
+                  <TableHead className="text-right">{t("paid_amount")}</TableHead>
+                  <TableHead>{t("due_date")}</TableHead>
+                  <TableHead>{t("submitted_to_bank")}</TableHead>
+                  <TableHead>{t("paid_on")}</TableHead>
                   <TableHead className="w-24">{t("actions")}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
                   {invoices.map((r) => (
                     <TableRow key={r.invoice_id} data-testid={`invoice-row-${r.invoice_id}`}>
-                      <TableCell className="font-medium">{r.supplier}</TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1">
+                          {r.supplier}
+                          {r.termijn && <Badge variant="outline" className="text-xs">{t("termijn")} {r.termijn}</Badge>}
+                        </div>
+                        {r.parent_quote_id && quoteById[r.parent_quote_id] && (
+                          <div className="text-xs text-muted-foreground">{t("offerte")}: {quoteById[r.parent_quote_id]}</div>
+                        )}
+                      </TableCell>
                       <TableCell>{postName[r.bouwpost_id] || <span className="text-rose-600">?</span>}</TableCell>
                       <TableCell><Badge variant="secondary">{t(r.type === "factuur" ? "factuur" : "offerte")}</Badge></TableCell>
                       <TableCell>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status === "geaccepteerd" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{t(r.status)}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status === "geaccepteerd" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{r.status ? t(r.status) : "—"}</span>
                       </TableCell>
-                      <TableCell className="text-right font-num">{eur(r.amount_incl_vat)}</TableCell>
+                      <TableCell className="text-right font-num">{r.amount_incl_vat ? eur(r.amount_incl_vat) : "—"}</TableCell>
                       <TableCell className="text-right font-num">{r.invoice_amount ? eur(r.invoice_amount) : "—"}</TableCell>
+                      <TableCell className="text-right font-num">{r.paid_amount ? eur(r.paid_amount) : (r.paid_on && r.invoice_amount ? eur(r.invoice_amount) : "—")}</TableCell>
+                      <TableCell className="font-num text-xs">{r.due_date || "—"}</TableCell>
                       <TableCell>{r.submitted_to_bank ? <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">{r.submitted_on || "✓"}</Badge> : "—"}</TableCell>
-                      <TableCell className="font-num">{r.paid_on || "—"}</TableCell>
+                      <TableCell className="font-num text-xs">{r.paid_on || "—"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openDialog("invoice", r)}><Pencil className="h-4 w-4" /></Button>
@@ -290,7 +312,7 @@ export default function BouwdepotPage() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!invoices.length && <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">{t("none_yet")}</TableCell></TableRow>}
+                  {!invoices.length && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">{t("none_yet")}</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -298,7 +320,19 @@ export default function BouwdepotPage() {
         </>
       )}
 
-      {dialog && (
+      {dialog && dialog.kind === "invoice" && (
+        <InvoiceDialog
+          open
+          onOpenChange={(o) => !o && setDialog(null)}
+          initial={dialog.initial}
+          offertes={offertes}
+          postOpts={postOpts}
+          statuses={statuses}
+          onSubmit={(v) => save("invoice", v)}
+          testid="dialog-invoice"
+        />
+      )}
+      {dialog && dialog.kind !== "invoice" && (
         <RecordDialog
           open={!!dialog}
           onOpenChange={(o) => !o && setDialog(null)}

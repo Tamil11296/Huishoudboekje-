@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
-  FileSpreadsheet, FileText,
+  FileSpreadsheet, FileText, Sparkles,
 } from "lucide-react";
 import api, { downloadFile } from "@/lib/api";
 import { eur, pct } from "@/lib/format";
@@ -55,6 +55,8 @@ export default function Dashboard() {
   const { t, currentId, currentHousehold } = useApp();
   const [data, setData] = useState(null);
   const [year, setYear] = useState(currentHousehold?.dashboard_year || new Date().getFullYear());
+  const [insights, setInsights] = useState(null);
+  const [insLoading, setInsLoading] = useState(false);
 
   useEffect(() => {
     if (!currentId) return;
@@ -125,6 +127,32 @@ export default function Dashboard() {
         <Kpi icon={PiggyBank} label={t("savings_rate")} value={pct(a.savings_rate)}
              tone={a.savings_rate >= 0 ? "pos" : "neg"} />
       </div>
+
+      <Card className="p-6" data-testid="ai-insights-card">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="font-heading text-lg font-semibold flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-slate-400" /> {t("ai_insights")}
+          </h2>
+          <Button size="sm" variant="outline" className="gap-1" disabled={insLoading} data-testid="generate-insights-btn"
+            onClick={async () => {
+              setInsLoading(true);
+              try {
+                const { data } = await api.post(`/households/${currentId}/ai/insights`);
+                setInsights(data.tips);
+              } finally { setInsLoading(false); }
+            }}>
+            <Sparkles className="h-4 w-4" /> {insLoading ? t("ai_thinking") : t("ai_insights")}
+          </Button>
+        </div>
+        {!insights && !insLoading && <p className="text-sm text-muted-foreground">{t("ai_intro")}</p>}
+        <ul className="space-y-2">
+          {(insights || []).map((tip, i) => (
+            <li key={i} className="flex gap-2 text-sm" data-testid={`insight-${i}`}>
+              <span className="text-emerald-600 font-bold">•</span><span>{tip}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
 
       <Card className="p-6">
         <h2 className="font-heading text-lg font-semibold mb-4">{t("income_vs_expense")}</h2>

@@ -10,9 +10,11 @@ import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import IncomeExpenses from "@/pages/IncomeExpenses";
 import BouwdepotPage from "@/pages/BouwdepotPage";
+import Pots from "@/pages/Pots";
 import Projects from "@/pages/Projects";
 import Settings from "@/pages/Settings";
 import Header from "@/components/Header";
+import AiAssistant from "@/components/AiAssistant";
 
 function Protected({ children }) {
   const { user } = useApp();
@@ -36,6 +38,7 @@ function Shell({ children }) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1">
         {children}
       </main>
+      <AiAssistant />
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
         Huishoudbudget & Bouwdepot · EUR · gemaakt voor gedeelde huishoudens
       </footer>
@@ -84,6 +87,16 @@ function AppRouter() {
           <Protected>
             <Shell>
               <BouwdepotPage />
+            </Shell>
+          </Protected>
+        }
+      />
+      <Route
+        path="/potjes"
+        element={
+          <Protected>
+            <Shell>
+              <Pots />
             </Shell>
           </Protected>
         }

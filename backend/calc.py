@@ -186,7 +186,7 @@ def compute_bouwpost_rollup(bp, invoices):
     accepted_quotes = sum(float(i.get("amount_incl_vat") or 0) for i in rows
                           if i.get("type") == "offerte" and i.get("status") == "geaccepteerd")
     invoiced = sum(float(i.get("invoice_amount") or 0) for i in rows if i.get("invoice_amount"))
-    paid = sum(float(i.get("invoice_amount") or 0) for i in rows if i.get("paid_on"))
+    paid = sum(float(i.get("paid_amount") or i.get("invoice_amount") or 0) for i in rows if i.get("paid_on"))
     budget = float(bp.get("budget") or 0)
     still_to_invoice = max(accepted_quotes - invoiced, 0)
     commitment = invoiced + still_to_invoice
@@ -207,7 +207,7 @@ def compute_bouwpost_rollup(bp, invoices):
 def compute_bouwdepot_summary(depot, bouwposten, invoices):
     depot_invoices = [i for i in invoices if i.get("bouwdepot_id") == depot["bouwdepot_id"]]
     start = float(depot.get("start_amount") or 0)
-    paid_out = sum(float(i.get("invoice_amount") or 0) for i in depot_invoices if i.get("paid_on"))
+    paid_out = sum(float(i.get("paid_amount") or i.get("invoice_amount") or 0) for i in depot_invoices if i.get("paid_on"))
     submitted_not_paid = sum(float(i.get("invoice_amount") or 0) for i in depot_invoices
                              if i.get("submitted_to_bank") and not i.get("paid_on"))
 
@@ -278,7 +278,7 @@ def _build_timeline(depot, invoices, start, paid_out, submitted_not_paid, still_
     start_date = _parse(depot.get("start_date")) or date.today()
     end_date = _parse(depot.get("end_date"))
     today = date.today()
-    paid = sorted([(_parse(i.get("paid_on")), float(i.get("invoice_amount") or 0))
+    paid = sorted([(_parse(i.get("paid_on")), float(i.get("paid_amount") or i.get("invoice_amount") or 0))
                    for i in invoices if i.get("paid_on") and _parse(i.get("paid_on"))],
                   key=lambda x: x[0])
     pts = {}
@@ -320,3 +320,32 @@ def compute_projects_summary(projects, items, avg_monthly_over):
             "avg_monthly_over": round(avg_monthly_over, 2),
         })
     return out
+
+
+def compute_pots_summary(pots, variable_expenses, year, months_elapsed, current_month):
+    """Envelope-style pots with carryover: allocated (monthly x months elapsed) minus spending
+    in linked categories = rolling balance."""
+    out = []
+    total_monthly = 0.0
+    for pot in pots:
+        cats = pot.get("categories") or []
+        monthly = float(pot.get("monthly_amount") or 0)
+        total_monthly += monthly
+        spent_ytd = 0.0
+        spent_month = 0.0
+        for ve in variable_expenses:
+            if ve.get("category") in cats and str(ve.get("month", ""))[:4] == str(year):
+                mm = int(str(ve["month"])[5:7])
+                amt = float(ve.get("amount") or 0)
+                if mm <= months_elapsed:
+                    spent_ytd += amt
+                if mm == current_month:
+                    spent_month += amt
+        allocated = round(monthly * months_elapsed, 2)
+        out.append({
+            "pot_id": pot["pot_id"], "name": pot.get("name"), "categories": cats,
+            "monthly_amount": round(monthly, 2), "allocated": allocated,
+            "spent": round(spent_ytd, 2), "balance": round(allocated - spent_ytd, 2),
+            "spent_month": round(spent_month, 2),
+        })
+    return {"pots": out, "total_monthly": round(total_monthly, 2)}

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Wallet, HardHat, Settings as Cog, Globe, Moon, Sun,
-  LogOut, ChevronDown, Home, Menu, X, PiggyBank,
+  LogOut, ChevronDown, Home, Menu, X, PiggyBank, Coins,
 } from "lucide-react";
 import { useApp } from "@/context/AppContext";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ const navItems = [
   { to: "/", key: "nav_dashboard", icon: LayoutDashboard, end: true },
   { to: "/inkomsten", key: "nav_income", icon: Wallet },
   { to: "/bouwdepot", key: "nav_bouwdepot", icon: HardHat },
+  { to: "/potjes", key: "nav_pots", icon: Coins },
   { to: "/projecten", key: "nav_projects", icon: PiggyBank },
   { to: "/instellingen", key: "nav_settings", icon: Cog },
 ];
