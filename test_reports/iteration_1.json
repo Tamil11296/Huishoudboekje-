@@ -1,0 +1,27 @@
+{
+  "summary": "Full backend + frontend testing of Huishoudbudget & Bouwdepot. 19/19 pytest backend tests pass covering auth (login/register/duplicate/unauth/logout), households CRUD, dashboard 2026, bouwdepot summary (6 metrics), incomes/fixed/variable/bouwposten/invoices CRUD, settings (persons/categories/split-rule/changelog), and invite flow. Frontend E2E via Playwright verified: owner login redirects to dashboard; dashboard shows non-zero annual KPIs (Totaal €86.800, Overschot €51.552, Spaarquote 59.4%), income-vs-expense bar chart, 2 per-person cards (Robeson houdt over €31.737, Miraja €19.815), months table; Income & Expenses page tabs, add-income dialog persists row; Bouwdepot cockpit shows real values (78k/24.8k/8.6k/11.4k/33.2k/96 days) with green Controle = €0 panel, bouwposten table (Keuken/Badkamer/Tuin/Vloer) and invoices table populated; Settings + Invite dialog produce invite_link. Language toggle NL/EN and household switcher present. No critical issues found.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts logs benign warnings 'width/height of chart should be >0' on first render before container measures — cosmetic only, chart renders correctly."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_backend_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Nav data-testids are `nav-nav_dashboard`, `nav-nav_income`, `nav-nav_bouwdepot`, `nav-nav_settings` (not `nav-dashboard` etc. as the review-request note stated). Consider simplifying to match documented convention.",
+    "server.py generic CRUD does not validate body fields (all optional, no Pydantic model); malformed payloads silently store nulls. Consider stricter validation.",
+    "DELETE /api/households/{hid} allows any member to delete? No — it correctly requires_owner. Good.",
+    "auth.py /session sets cookie samesite=none secure=true — fine for HTTPS preview; ensure production still uses HTTPS.",
+    "No brute-force lockout on /api/auth/login. Consider rate-limiting (playbook mentions 5-fail lockout)."
+  ],
+  "updated_files": ["/app/backend/tests/test_backend_api.py"],
+  "success_rate": {"backend": "100% (19/19)", "frontend": "100% of tested flows"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026!",
+  "seed_data_creation": "Demo household 'Huize Constantine' auto-seeded on startup; all test-created data prefixed TEST_ and cleaned up in tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend pytest suite at /app/backend/tests/test_backend_api.py — run with `pytest backend/tests/test_backend_api.py -v`. Nav testids are `nav-nav_<key>` not `nav-<key>`. Invite dialog closes via overlay click or Escape before navigating to other pages in Playwright."
+}
