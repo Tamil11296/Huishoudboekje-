@@ -1,0 +1,21 @@
+{
+  "summary": "Iteration 4 refinements testing (both backend + frontend). All 4 features verified end-to-end. Backend: 4/4 new pytest tests pass in /app/backend/tests/test_iter4_features.py (pots-summary history array per pot; dashboard.category_items map with description+amount and months[].per_person[pid].net; bouwdepot-summary depots[].checks contain termijn_due warning for near-due unpaid factuur and termijn_overdue error for past due_date). Frontend E2E (owner login robeson.constantine@gmail.com): (1) Pots page shows 4 pot-card items each with pot-history-{id} area sparkline below balance; (2) Dashboard months-table now has per-person columns Robeson & Miraja with green/red net values (Jan example: Robeson €2.294, Miraja €1.826); (3) Dashboard category pie is clickable - iterated 8 sectors: opens category-detail-dialog titled by category with listed descriptions. Verified 'Uit eten' dialog shows exactly 'Restaurant verjaardag €128' + 'Afhaal weekend €54'; 'Boodschappen' shows 'Boodschappen budget €7.800 + Extra feestdagen €190'; all 8 categories render correctly; (4) Created via API a TEST_ui_quote offerte + factuur due 2026-10-01 (5 days ahead, not submitted) + factuur due 2026-09-16 (overdue 10 days). Navigated to bouwdepot control-check-warning-panel: both amber 'Termijn van TEST_ui_quote vervalt over 5 dagen en is nog niet ingediend bij de bank' warning and red 'Termijn van TEST_ui_quote is 10 dagen over de vervaldatum en nog niet betaald' error render. Cleaned up all test invoices. Language toggle (data-testid=language-toggle) works. No JS crashes; only benign Recharts width/height warnings on first mount.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iter4_features.py",
+    "/app/test_reports/pytest/iter4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Backend uses Dutch strings for invoice type ('offerte'/'factuur') and status ('geaccepteerd') - this must be respected by any future test/dev; the initial iteration_3 pytest used 'quote'/'invoice'/'accepted' and only appeared to pass because a naive string-scan matched the description text. Fixed in iter4 tests: pytest now uses correct 'factuur'/'offerte' and asserts on depots[].checks[].code directly.",
+  "Server 'today' is real container clock (2026-09-26) - tests should use dt.date.today() rather than hard-coded anchors so termijn day-diff math works."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter4_features.py"],
+  "success_rate": {"backend": "100% (4/4 new)", "frontend": "100% of tested new flows"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026!",
+  "seed_data_creation": "Only ephemeral TEST_ui_quote offerte + 2 termijn facturen created via API to trigger termijn reminders; all deleted after verification.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Invoice type values in DB are Dutch: 'offerte' (quote) and 'factuur' (invoice); status for accepted quote is 'geaccepteerd'. Server today is real container time (2026-09 as of testing). Pie sector selector: [data-testid=\"category-pie\"] .recharts-pie-sector - iterate .nth(i).click(force=True) then close with Escape; state re-renders detach nodes so re-resolve locator each iteration. Control panel testid=control-check-warning-panel with per-item testid control-check-{code}-{i}."
+}
