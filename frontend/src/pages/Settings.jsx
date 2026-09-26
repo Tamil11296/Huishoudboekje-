@@ -29,6 +29,7 @@ export default function Settings() {
   const [year, setYear] = useState(2026);
   const [newPerson, setNewPerson] = useState("");
   const [newCat, setNewCat] = useState({ income: "", expense: "", bouwpost: "" });
+  const [catBudgets, setCatBudgets] = useState({});
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLink, setInviteLink] = useState("");
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -43,6 +44,7 @@ export default function Settings() {
     setName(data.name);
     setSplit(data.split_rule);
     setYear(data.dashboard_year);
+    setCatBudgets(data.category_budgets || {});
     const cl = await api.get(`/households/${currentId}/changelog`);
     setChangelog(cl.data);
   }, [currentId]);
@@ -75,6 +77,20 @@ export default function Settings() {
   const delCat = async (type, cat) => {
     await api.delete(`/households/${currentId}/categories`, { params: { type, name: cat } });
     await loadHouseholds(); refresh();
+  };
+
+  const saveBudgets = async () => {
+    try {
+      const clean = {};
+      Object.entries(catBudgets).forEach(([k, v]) => {
+        const n = Number(v);
+        if (n > 0) clean[k] = n;
+      });
+      await api.patch(`/households/${currentId}`, { category_budgets: clean });
+      await loadHouseholds();
+      await refresh();
+      toast.success(t("save"));
+    } catch (e) { toast.error(apiErr(e)); }
   };
 
   const sendInvite = async () => {
@@ -169,6 +185,28 @@ export default function Settings() {
         {catBlock("income", "cat_income")}
         {catBlock("expense", "cat_expense")}
         {catBlock("bouwpost", "cat_bouwpost")}
+      </Card>
+
+      <Card className="p-6 space-y-4" data-testid="category-budget-card">
+        <div>
+          <h2 className="font-heading text-lg font-semibold">{t("category_budget")}</h2>
+          <p className="text-sm text-muted-foreground mt-1">{t("cat_budget_desc")}</p>
+        </div>
+        <div className="grid sm:grid-cols-2 gap-3">
+          {(hh.categories.expense || []).map((c) => (
+            <div key={c} className="flex items-center gap-3">
+              <Label className="flex-1 truncate text-sm font-medium">{c}</Label>
+              <div className="relative w-36">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">€</span>
+                <Input type="number" min="0" step="10" className="pl-7 font-num"
+                       value={catBudgets[c] ?? ""}
+                       onChange={(e) => setCatBudgets({ ...catBudgets, [c]: e.target.value })}
+                       placeholder="0" data-testid={`budget-input-${c}`} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <Button onClick={saveBudgets} className="rounded-full" data-testid="save-budgets-btn">{t("save_budgets")}</Button>
       </Card>
 
       <Card className="p-6 space-y-4">

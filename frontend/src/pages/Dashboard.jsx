@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
-  FileSpreadsheet, FileText, Sparkles,
+  FileSpreadsheet, FileText, Sparkles, AlertTriangle, Target,
 } from "lucide-react";
 import api, { downloadFile } from "@/lib/api";
 import { eur, pct } from "@/lib/format";
@@ -88,6 +88,8 @@ export default function Dashboard() {
   const years = [year - 1, year, year + 1];
   const savingsData = data.months.map((m) => ({ name: m.label.slice(0, 3), [t("over")]: m.over }));
   const categoryData = Object.entries(data.expense_by_category || {}).map(([name, value]) => ({ name, value }));
+  const catBudgets = data.category_budgets || [];
+  const overCount = catBudgets.filter((c) => c.over_month).length;
 
   return (
     <div className="space-y-8">
@@ -117,6 +119,15 @@ export default function Dashboard() {
           </Button>
         </div>
       </div>
+
+      {overCount > 0 && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
+          data-testid="budget-alert-banner">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span><span className="font-semibold">{overCount}</span> {t("categories_over_budget")}</span>
+        </motion.div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-testid="dashboard-kpis">
         <Kpi icon={Wallet} label={t("total_income")} value={eur(a.income)} />
@@ -222,6 +233,51 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {catBudgets.length > 0 ? (
+        <Card className="p-6" data-testid="category-budget-block">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-heading text-lg font-semibold flex items-center gap-2">
+              <Target className="h-5 w-5 text-slate-400" /> {t("category_budget")}
+            </h2>
+            {data.current_month_label && <span className="text-sm text-muted-foreground">{data.current_month_label}</span>}
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">{t("cat_budget_desc")}</p>
+          <div className="space-y-4">
+            {catBudgets.map((c) => {
+              const pct = Math.min(c.month_pct, 100);
+              const over = c.over_month;
+              return (
+                <div key={c.category} data-testid={`budget-row-${c.category}`}>
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="font-medium">{c.category}</span>
+                    <span className="font-num">
+                      <span className={over ? "text-rose-600 font-semibold" : ""}>{eur(c.spent_month)}</span>
+                      <span className="text-muted-foreground"> {t("of_budget")} {eur(c.monthly_budget)}</span>
+                    </span>
+                  </div>
+                  <div className="h-2.5 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${over ? "bg-rose-500" : c.month_pct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                         style={{ width: `${pct}%` }} />
+                  </div>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-muted-foreground">
+                      {t("spent_this_year")}: <span className="font-num">{eur(c.spent_year)}</span> {t("of_budget")} {eur(c.annual_budget)}
+                    </span>
+                    {over
+                      ? <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200 gap-1"><AlertTriangle className="h-3 w-3" />{t("over_budget")}</Badge>
+                      : <Badge variant="secondary" className="text-xs">{c.month_pct}%</Badge>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      ) : (
+        <Card className="p-6 text-sm text-muted-foreground flex items-center gap-2" data-testid="category-budget-empty">
+          <Target className="h-4 w-4" /> {t("no_budgets_set")}
+        </Card>
+      )}
 
       <div>
         <h2 className="font-heading text-xl font-bold mb-4">{t("per_person")} — {t("what_left")}</h2>

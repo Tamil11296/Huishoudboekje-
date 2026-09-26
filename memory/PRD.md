@@ -23,11 +23,12 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
 - 2026-06 v1: Auth (JWT+Google), households/invites/roles, settings/categories/persons, income+fixed/variable expenses, split logic + projections, dashboard + per-person, bouwdepot (bouwposten/invoices/tracker/control checks), demo household, NL/EN, dark/light. Tested 19/19 backend + full FE.
 - 2026-06 v2: Bouwdepot drawdown chart (actual+forecast), Excel+PDF export, smart warnings (budget_near/overrun/depot_low), dashboard category pie + monthly savings chart, Projecten & Sparen (savings goals with required-monthly + feasibility). Tested 7/7 + FE.
 - 2026-06 v3: Claude AI assistant (floating chat), AI dashboard insights card, AI auto-categorize in variable-expense dialog; Potjes (envelope budgeting, carryover, category-linked, manual + auto-distribute); termijnfacturen (installments linked to a quote, due date, expected vs paid). Tested 6/6 backend + full FE E2E pass.
+- 2026-06 v4: Categorie-budget — per expense category a monthly budget (household.category_budgets), set in Settings. Dashboard shows a budget block (spent-this-month vs monthly budget + this-year vs annual budget, color-coded progress + over/near badges) and a top-of-dashboard alert banner counting over-budget categories. AI context/insights now include category budget status. Verified via API + FE (desktop + mobile).
 
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.
 - P1: per-pot monthly contribution tracking to auto-grow project progress; markers on drawdown chart.
-- P2: recurring monthly AI email report; per-category monthly budget alerts.
+- P2: recurring monthly AI email report.
 - P2: bank/PSD2 auto-import (future); streaming AI responses (currently non-streaming).
 
 ## Test credentials
