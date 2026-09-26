@@ -23,13 +23,18 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
 - 2026-06 v1: Auth (JWT+Google), households/invites/roles, settings/categories/persons, income+fixed/variable expenses, split logic + projections, dashboard + per-person, bouwdepot (bouwposten/invoices/tracker/control checks), demo household, NL/EN, dark/light. Tested 19/19 backend + full FE.
 - 2026-06 v2: Bouwdepot drawdown chart (actual+forecast), Excel+PDF export, smart warnings (budget_near/overrun/depot_low), dashboard category pie + monthly savings chart, Projecten & Sparen (savings goals with required-monthly + feasibility). Tested 7/7 + FE.
 - 2026-06 v3: Claude AI assistant (floating chat), AI dashboard insights card, AI auto-categorize in variable-expense dialog; Potjes (envelope budgeting, carryover, category-linked, manual + auto-distribute); termijnfacturen (installments linked to a quote, due date, expected vs paid). Tested 6/6 backend + full FE E2E pass.
-- 2026-06 v4: Categorie-budget — per expense category a monthly budget (household.category_budgets), set in Settings. Dashboard shows a budget block (spent-this-month vs monthly budget + this-year vs annual budget, color-coded progress + over/near badges) and a top-of-dashboard alert banner counting over-budget categories. AI context/insights now include category budget status. Verified via API + FE (desktop + mobile).
+- 2026-06 v4: (superseded) Categorie-budget per uitgavecategorie — later vervangen door potje-gedreven budget (zie v5).
+- 2026-06 v5:
+  - Refresh/onboarding-race fix: `ready`-vlag in AppContext gate't de onboarding-redirect (geen bounce naar /onboarding meer bij verversen).
+  - Potjes verrekend in dashboard-overschot: Overschot-KPI toont "gereserveerd in potjes" + "vrij na potjes" (maand+jaar); spaargrafiek 2e lijn "Vrij na potjes"; potjes-overzicht op dashboard; maandentabel kolommen Potjes + Vrij na potjes; Cumulatief rekent na-potjes.
+  - Bouwdepot dubbeltel-fix: `still_to_submit` per geaccepteerde offerte vermindert met gekoppelde termijnfacturen (ingediend/betaald) → "vrij besteedbaar" blijft stabiel bij toevoegen termijn. Geen statuswijziging.
+  - Budget uit potjes: los categorie-budget verwijderd; dashboard toont per potje "besteed deze maand vs. maandbedrag" + over-budget banner; AI-context beschrijft potjes-budget.
+  - MERGE Potjes + Projecten → één tab "Doelen & Sparen" (/doelen). Een doel = pot met optioneel target_date + kostenposten + already_saved. Doorlopend potje (categorie-envelop) of project-type (kostenposten → doelbedrag, required-monthly, haalbaarheid). Backend compute_goals_summary + /goals-summary; migratie projects→pots (idempotent). Nav + dashboard hernoemd. Tested 7/7 backend + full FE E2E.
 
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.
-- P1: per-pot monthly contribution tracking to auto-grow project progress; markers on drawdown chart.
-- P2: recurring monthly AI email report.
-- P2: bank/PSD2 auto-import (future); streaming AI responses (currently non-streaming).
+- P2: recurring monthly AI email report; bank/PSD2 auto-import; streaming AI responses.
+- P3 (cosmetic): silence Recharts ResponsiveContainer zero-size warning; add DialogDescription/aria-describedby for a11y; purge stale legacy `category_budgets` field from household docs.
 
 ## Test credentials
 - robeson.constantine@gmail.com / Bouwdepot2026! (owner of demo household "Huize Constantine", year 2026)

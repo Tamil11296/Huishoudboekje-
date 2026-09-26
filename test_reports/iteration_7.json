@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 7: verified the merged 'Doelen & Sparen' feature (Potjes + Projecten merged). Backend: 7/7 pytest tests passed - old Projects endpoint returns empty (migration OK), /goals-summary returns exactly 5 demo goals (4 continuous envelope + 1 project-type 'Kindje op komst' with 4 cost items and computed months_left/required_monthly/feasible), dashboard 200, /pots-summary still available, AI chat 200, full goal CRUD + cost-item CRUD works, overspend flow (Boodschappen 1699) correctly pushes spent_month over monthly_amount and cleanup restores it. Frontend: header has single 'nav-nav_goals' testid (old nav-nav_pots / nav-nav_projects gone), /doelen route loads Goals page with 5 goal-cards, dashboard-pots-block titled 'Doelen & Sparen' with 5 dashboard-pot-* tiles, create/edit/add-cost-item flow via dialog-goal + dialog-item works, badges 'Doorlopend potje' and 'Met streefdatum' render correctly, deletion returns list to 5 goals.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Goals cards + dashboard tiles", "issues": ["Recharts warning 'width(-1) and height(-1) of chart should be greater than 0' logged repeatedly on initial mount (ResponsiveContainer inside hidden/zero-height parent). Cosmetic only.", "DialogContent 'Missing Description or aria-describedby' Radix a11y warning on dialog-goal and dialog-item."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter7_goals.py",
+    "/app/test_reports/pytest/iter7.xml"
+  ],
+  "action_items": [
+    "(Optional/minor) Silence Recharts ResponsiveContainer warning by giving the wrapper an explicit min-height or aspect.",
+    "(Optional/minor) Add DialogDescription (or aria-describedby) to GoalDialog and RecordDialog for a11y."
+  ],
+  "critical_code_review_comments": [
+    "Migration in server startup is idempotent (projects->pots + repoint project_items) - verified empty projects endpoint after startup.",
+    "compute_goals_summary correctly branches has_target on either target_date OR presence of items; edge: continuous goal with 0 items and no target_date correctly stays has_target=false.",
+    "Frontend Goals.jsx creates cost items using pot_id as project_id - keeps legacy schema; fine.",
+    "required_monthly can be 0 when allocated already exceeds total_cost (goal already funded via monthly deposits + already_saved). Not a bug but adjust UI copy if desired."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter7_goals.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all flows executed)"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created and deleted a TEST goal + cost item via API and UI; created and deleted TEST variable-expense (Boodschappen 1699) for overspend check. Additionally cleaned stale test data left from a prior failed run (2 vex_* Boodschappen TEST rows). Demo restored to exactly 5 goals.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter7 merge (Doelen & Sparen) verified end-to-end. variable-expense id key is 'item_id' not 'expense_id' - keep in mind for cleanup. Backend fixture logs in via cookies (POST /api/auth/login). Recharts and Radix a11y warnings are noisy but non-blocking."
+}
