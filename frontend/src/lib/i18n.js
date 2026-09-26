@@ -215,6 +215,8 @@ export const translations = {
     goal_project: "Met streefdatum",
     monthly_deposit: "Inleg per maand",
     goals_over_budget: "doel(en) boven het maandbedrag deze maand",
+    goal_completed: "Doel behaald! 🎉",
+    ai_tip: "AI-tip",
   },
   en: {
     app_name: "Household Budget & Building Deposit",
@@ -423,5 +425,7 @@ export const translations = {
     goal_project: "With target date",
     monthly_deposit: "Deposit per month",
     goals_over_budget: "goal(s) over the monthly amount this month",
+    goal_completed: "Goal reached! 🎉",
+    ai_tip: "AI tip",
   },
 };

@@ -30,6 +30,11 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
   - Bouwdepot dubbeltel-fix: `still_to_submit` per geaccepteerde offerte vermindert met gekoppelde termijnfacturen (ingediend/betaald) → "vrij besteedbaar" blijft stabiel bij toevoegen termijn. Geen statuswijziging.
   - Budget uit potjes: los categorie-budget verwijderd; dashboard toont per potje "besteed deze maand vs. maandbedrag" + over-budget banner; AI-context beschrijft potjes-budget.
   - MERGE Potjes + Projecten → één tab "Doelen & Sparen" (/doelen). Een doel = pot met optioneel target_date + kostenposten + already_saved. Doorlopend potje (categorie-envelop) of project-type (kostenposten → doelbedrag, required-monthly, haalbaarheid). Backend compute_goals_summary + /goals-summary; migratie projects→pots (idempotent). Nav + dashboard hernoemd. Tested 7/7 backend + full FE E2E.
+- 2026-06 v6 (doelen-uitbreiding):
+  - Voltooid-melding: compute_goals_summary geeft `completed` (saldo ≥ doelbedrag) + `date_passed`; Doelen-scherm toont "Doel behaald! 🎉"-badge.
+  - AI-tip per doel: POST /households/{hid}/goals/{pot_id}/tip (Claude) → felicitatie/vervolgtip; knop + weergave op de kaart.
+  - Slim verdelen: POST /households/{hid}/goals/distribute verdeelt het maandelijkse overschot — project-doelen (op streefdatum gesorteerd) krijgen hun required-monthly, doorlopende potjes de rest gelijk verdeeld; "Verdeel overschot"-knop op /doelen.
+  - Export: PDF + Excel tonen nu "Doelen & Sparen" (type, streefdatum, saldo, per maand, nog nodig, haalbaar) i.p.v. losse Projecten. Backend curl + FE screenshot geverifieerd.
 
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.

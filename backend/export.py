@@ -68,12 +68,14 @@ def build_excel(p):
           [[i.get("supplier"), i.get("type"), i.get("status"), i.get("amount_incl_vat"),
             i.get("invoice_amount"), "Ja" if i.get("submitted_to_bank") else "Nee", i.get("paid_on")]
            for i in p.get("invoices", [])])
-    sheet("Projecten & Sparen",
-          ["Project", "Streefdatum", "Totale kosten", "Al gespaard", "Nog nodig",
-           "Maanden", "Per maand sparen", "Haalbaar"],
-          [[pr["name"], pr["target_date"], pr["total_cost"], pr["already_saved"], pr["remaining"],
-            pr["months_left"], pr["required_monthly"], "Ja" if pr["feasible"] else "Nee"]
-           for pr in p.get("projects", [])])
+    sheet("Doelen & Sparen",
+          ["Doel", "Type", "Streefdatum", "Saldo", "Per maand", "Nog nodig", "Maanden", "Haalbaar"],
+          [[g["name"], "Project" if g.get("has_target") else "Doorlopend",
+            g.get("target_date") or "-", g["balance"], g["monthly_amount"],
+            g.get("remaining", "-") if g.get("has_target") else "-",
+            g.get("months_left", "-") if g.get("has_target") else "-",
+            ("Ja" if g.get("feasible") else "Nee") if g.get("has_target") else "-"]
+           for g in p.get("goals", [])])
 
     buf = io.BytesIO()
     wb.save(buf)
@@ -147,13 +149,15 @@ def build_pdf(p):
                           [[po['name'], _eur(po['budget']), _eur(po['commitment']), _eur(po['room'])]
                            for po in d['posts']]))
 
-    if p.get("projects"):
+    if p.get("goals"):
         el.append(Spacer(1, 10))
-        el.append(Paragraph("Projecten & Sparen", h2))
-        el.append(tbl([["Project", "Streefdatum", "Nog nodig", "Per maand", "Haalbaar"]] +
-                      [[pr['name'], str(pr['target_date'] or '-'), _eur(pr['remaining']),
-                        _eur(pr['required_monthly']), 'Ja' if pr['feasible'] else 'Nee']
-                       for pr in p['projects']]))
+        el.append(Paragraph("Doelen &amp; Sparen", h2))
+        el.append(tbl([["Doel", "Type", "Streefdatum", "Saldo", "Per maand", "Haalbaar"]] +
+                      [[g['name'], "Project" if g.get('has_target') else "Doorlopend",
+                        str(g.get('target_date') or '-'), _eur(g['balance']),
+                        _eur(g.get('required_monthly') if g.get('has_target') else g['monthly_amount']),
+                        ('Ja' if g.get('feasible') else 'Nee') if g.get('has_target') else '-']
+                       for g in p['goals']]))
 
     doc.build(el)
     return buf.getvalue()

@@ -443,6 +443,7 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
             "spent_month": round(spent_month, 2), "balance": balance, "history": history,
             "note": pot.get("note", ""), "has_target": has_target,
             "target_date": target_date, "items": items, "total_cost": total_cost,
+            "completed": False, "date_passed": False,
         }
         if has_target:
             td = _parse(target_date)
@@ -453,6 +454,8 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
                 "months_left": months_left, "remaining": round(remaining, 2),
                 "required_monthly": required, "feasible": required <= avg_monthly_over,
                 "progress": round(balance / total_cost * 100, 1) if total_cost > 0 else 0,
+                "completed": total_cost > 0 and balance >= total_cost - 0.005,
+                "date_passed": bool(td and td < today),
             })
         out.append(goal)
     return {"goals": out, "total_monthly": round(total_monthly, 2)}

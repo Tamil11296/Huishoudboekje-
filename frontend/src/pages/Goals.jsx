@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Coins, Target, CalendarClock, CheckCircle2, AlertTriangle,
+  Wand2, Sparkles, PartyPopper,
 } from "lucide-react";
 import api from "@/lib/api";
 import { eur, apiErr } from "@/lib/format";
@@ -24,6 +25,8 @@ export default function Goals() {
   const [summary, setSummary] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [itemDialog, setItemDialog] = useState(null);
+  const [tips, setTips] = useState({});
+  const [tipBusy, setTipBusy] = useState(null);
   const cats = currentHousehold?.categories?.expense || [];
 
   const load = useCallback(async () => {
@@ -53,6 +56,17 @@ export default function Goals() {
   };
   const delItem = async (id) => { await api.delete(`/households/${currentId}/project-items/${id}`); load(); };
 
+  const distribute = async () => {
+    try { await api.post(`/households/${currentId}/goals/distribute`); toast.success(t("auto_distribute")); load(); }
+    catch (e) { toast.error(apiErr(e)); }
+  };
+  const getTip = async (id) => {
+    setTipBusy(id);
+    try { const { data } = await api.post(`/households/${currentId}/goals/${id}/tip`); setTips((p) => ({ ...p, [id]: data.tip })); }
+    catch (e) { toast.error(apiErr(e)); }
+    finally { setTipBusy(null); }
+  };
+
   if (!summary) return <div className="text-muted-foreground">{t("loading")}</div>;
 
   return (
@@ -64,9 +78,14 @@ export default function Goals() {
             {t("free_surplus")}: <span className={`font-num font-semibold ${summary.free_surplus >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(summary.free_surplus)}</span> / {t("month").toLowerCase()}
           </p>
         </div>
-        <Button className="gap-1 rounded-full" onClick={() => setDialog({})} data-testid="add-goal-btn">
-          <Plus className="h-4 w-4" /> {t("add_goal")}
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" className="gap-1 rounded-full" onClick={distribute} data-testid="distribute-btn">
+            <Wand2 className="h-4 w-4" /> {t("auto_distribute")}
+          </Button>
+          <Button className="gap-1 rounded-full" onClick={() => setDialog({})} data-testid="add-goal-btn">
+            <Plus className="h-4 w-4" /> {t("add_goal")}
+          </Button>
+        </div>
       </div>
 
       {!summary.goals.length && <Card className="p-10 text-center text-muted-foreground">{t("none_yet")}</Card>}
@@ -95,9 +114,27 @@ export default function Goals() {
                   </div>
                 </div>
 
-                <Badge variant="secondary" className="gap-1">
-                  {g.has_target ? <><CalendarClock className="h-3 w-3" /> {t("goal_project")}</> : <>{t("goal_continuous")}</>}
-                </Badge>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary" className="gap-1">
+                    {g.has_target ? <><CalendarClock className="h-3 w-3" /> {t("goal_project")}</> : <>{t("goal_continuous")}</>}
+                  </Badge>
+                  {g.completed && (
+                    <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 gap-1" data-testid={`goal-completed-${g.pot_id}`}>
+                      <PartyPopper className="h-3 w-3" /> {t("goal_completed")}
+                    </Badge>
+                  )}
+                  {g.has_target && (
+                    <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full text-xs ml-auto" disabled={tipBusy === g.pot_id}
+                      onClick={() => getTip(g.pot_id)} data-testid={`goal-tip-btn-${g.pot_id}`}>
+                      <Sparkles className="h-3 w-3" /> {tipBusy === g.pot_id ? t("ai_thinking") : t("ai_tip")}
+                    </Button>
+                  )}
+                </div>
+                {tips[g.pot_id] && (
+                  <div className="text-xs rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2.5 flex gap-2" data-testid={`goal-tip-${g.pot_id}`}>
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" /> <span>{tips[g.pot_id]}</span>
+                  </div>
+                )}
 
                 <div className="text-center py-1">
                   <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{t("pot_balance")}</div>

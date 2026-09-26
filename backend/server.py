@@ -324,9 +324,13 @@ async def _gather_export(hid, hh):
     depot_sum = [compute_bouwdepot_summary(d, bouwposten, invoices) for d in depots]
     projects = await db.projects.find({"household_id": hid}, {"_id": 0}).to_list(100)
     pitems = await db.project_items.find({"household_id": hid}, {"_id": 0}).to_list(1000)
-    projsum = compute_projects_summary(projects, pitems, dash["annual"].get("avg_monthly_over", 0))
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    now = datetime.now(timezone.utc)
+    cur_month = now.month if year == now.year else (12 if year < now.year else 0)
+    goals = compute_goals_summary(pots, pitems, variable, year, cur_month, cur_month,
+                                  dash["annual"].get("avg_monthly_over", 0))["goals"]
     return {"household": hh, "dashboard": dash, "depots": depot_sum,
-            "invoices": invoices, "projects": projsum}
+            "invoices": invoices, "goals": goals}
 
 
 @api_router.get("/households/{hid}/export/{fmt}")
@@ -364,6 +368,70 @@ async def pots_summary(hid: str, user: dict = Depends(get_current_user)):
     res["avg_monthly_over"] = avg
     res["free_surplus"] = round(avg - res["total_monthly"], 2)
     return res
+
+
+async def _goals_ctx(hid, hh):
+    now = datetime.now(timezone.utc)
+    year = hh.get("dashboard_year") or now.year
+    cur_month = now.month if year == now.year else (12 if year < now.year else 0)
+    variable = await db.variable_expenses.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    pitems = await db.project_items.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    incomes = await db.incomes.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    dash = compute_dashboard(hh, incomes, fixed, variable, year)
+    avg = dash["annual"].get("avg_monthly_over", 0)
+    goals = compute_goals_summary(pots, pitems, variable, year, cur_month, cur_month, avg)["goals"]
+    return goals, avg
+
+
+@api_router.post("/households/{hid}/goals/distribute")
+async def distribute_goals(hid: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    goals, avg = await _goals_ctx(hid, hh)
+    from datetime import date as _date
+    budget = max(avg, 0)
+
+    def keyf(g):
+        td = g.get("target_date")
+        try:
+            return _date.fromisoformat(str(td)[:10]) if td else _date.max
+        except Exception:
+            return _date.max
+
+    alloc = {g["pot_id"]: 0.0 for g in goals}
+    left = budget
+    for g in sorted([x for x in goals if x.get("has_target") and x.get("remaining", 0) > 0], key=keyf):
+        give = round(min(g["required_monthly"], max(left, 0)), 2)
+        alloc[g["pot_id"]] = give
+        left = round(left - give, 2)
+    cont = [g for g in goals if not g.get("has_target")]
+    if cont and left > 0:
+        each = round(left / len(cont), 2)
+        for g in cont:
+            alloc[g["pot_id"]] = each
+    for pid, val in alloc.items():
+        await db.pots.update_one({"pot_id": pid, "household_id": hid}, {"$set": {"monthly_amount": val}})
+    await log_change(hid, user, "doelen", "Overschot automatisch verdeeld over doelen")
+    return {"allocations": alloc, "avg_monthly_over": avg}
+
+
+@api_router.post("/households/{hid}/goals/{pot_id}/tip")
+async def goal_tip(hid: str, pot_id: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    goals, avg = await _goals_ctx(hid, hh)
+    g = next((x for x in goals if x["pot_id"] == pot_id), None)
+    if not g:
+        raise HTTPException(status_code=404, detail="Doel niet gevonden")
+    status = "behaald" if g.get("completed") else ("op schema/haalbaar" if g.get("feasible") else "nog niet haalbaar binnen de tijd")
+    system = ("Je bent een enthousiaste Nederlandse financiële coach. Antwoord in 1-2 korte zinnen "
+              "(max 35 woorden), met euro-bedragen. Feliciteer als het doel is behaald; geef anders één "
+              "concrete vervolgtip. Verzin geen getallen buiten de gegeven data.")
+    prompt = (f"Doel '{g['name']}': saldo €{g['balance']}, doelbedrag €{g.get('total_cost', 0)}, "
+              f"inleg €{g['monthly_amount']}/mnd, streefdatum {g.get('target_date') or 'geen'}, "
+              f"per maand nodig €{g.get('required_monthly', 0)}, gem. overschot €{avg}/mnd, status: {status}.")
+    reply = await ask_claude(new_id("gtip"), system, prompt)
+    return {"tip": reply}
 
 
 @api_router.get("/households/{hid}/goals-summary")
