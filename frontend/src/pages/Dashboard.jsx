@@ -372,6 +372,8 @@ export default function Dashboard() {
                 <TableHead className="text-right">{t("fixed_expenses")}</TableHead>
                 <TableHead className="text-right">{t("variable_expenses")}</TableHead>
                 <TableHead className="text-right">{t("over")}</TableHead>
+                {potsMonthly > 0 && <TableHead className="text-right">{t("nav_pots")}</TableHead>}
+                {potsMonthly > 0 && <TableHead className="text-right">{t("after_pots")}</TableHead>}
                 {data.persons.map((p) => (
                   <TableHead key={p.person_id} className="text-right">{p.name}</TableHead>
                 ))}
@@ -393,6 +395,14 @@ export default function Dashboard() {
                   <TableCell className={`text-right font-num font-semibold ${m.over >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                     {eur(m.over)}
                   </TableCell>
+                  {potsMonthly > 0 && (
+                    <TableCell className="text-right font-num text-muted-foreground">−{eur(potsMonthly)}</TableCell>
+                  )}
+                  {potsMonthly > 0 && (
+                    <TableCell className={`text-right font-num font-semibold ${(m.over - potsMonthly) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {eur(m.over - potsMonthly)}
+                    </TableCell>
+                  )}
                   {data.persons.map((p) => (
                     <TableCell key={p.person_id} className={`text-right font-num ${(m.per_person[p.person_id]?.net || 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                       {eur(m.per_person[p.person_id]?.net)}
