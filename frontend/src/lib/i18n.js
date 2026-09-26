@@ -193,6 +193,7 @@ export const translations = {
     expected_amount: "Verwacht",
     paid_amount: "Betaald",
     termijn: "Termijn",
+    click_category: "Klik op een categorie voor de omschrijvingen",
   },
   en: {
     app_name: "Household Budget & Building Deposit",
@@ -379,5 +380,6 @@ export const translations = {
     expected_amount: "Expected",
     paid_amount: "Paid",
     termijn: "Instalment",
+    click_category: "Click a category to see its items",
   },
 };

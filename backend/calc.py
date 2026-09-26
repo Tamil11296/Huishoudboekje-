@@ -79,6 +79,7 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
     cumulative = 0.0
     annual = {"income": 0, "fixed": 0, "variable": 0, "expenses": 0, "over": 0}
     expense_by_category = {}
+    cat_items = {}
     per_person_year = {p["person_id"]: {"income": 0, "own": 0, "joint_share": 0, "net": 0}
                        for p in persons}
 
@@ -103,6 +104,9 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             fixed_total += amt
             _cat = ex.get("category") or "Overig"
             expense_by_category[_cat] = expense_by_category.get(_cat, 0) + amt
+            _desc = ex.get("description") or _cat
+            cat_items.setdefault(_cat, {})
+            cat_items[_cat][_desc] = cat_items[_cat].get(_desc, 0) + amt
             pb = ex.get("paid_by", "joint")
             if pb in own_expense:
                 own_expense[pb] += amt
@@ -118,6 +122,9 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             variable_total += amt
             _cat = ve.get("category") or "Overig"
             expense_by_category[_cat] = expense_by_category.get(_cat, 0) + amt
+            _desc = ve.get("description") or _cat
+            cat_items.setdefault(_cat, {})
+            cat_items[_cat][_desc] = cat_items[_cat].get(_desc, 0) + amt
             pb = ve.get("paid_by", "joint")
             if pb in own_expense:
                 own_expense[pb] += amt
@@ -178,7 +185,10 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             "per_person_year": per_person_year, "persons": persons,
             "split_rule": rule,
             "expense_by_category": {k: round(v, 2) for k, v in
-                                    sorted(expense_by_category.items(), key=lambda x: -x[1])}}
+                                    sorted(expense_by_category.items(), key=lambda x: -x[1])},
+            "category_items": {c: sorted([{"description": d, "amount": round(v, 2)}
+                                          for d, v in items.items()], key=lambda x: -x["amount"])
+                               for c, items in cat_items.items()}}
 
 
 def compute_bouwpost_rollup(bp, invoices):
@@ -248,6 +258,21 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
     elif start > 0 and freely_available < start * 0.1:
         checks.append({"level": "warning", "code": "depot_low",
                        "message": f"Bijna leeg: nog maar €{round(freely_available, 2)} vrij besteedbaar in het bouwdepot."})
+    for i in depot_invoices:
+        if i.get("type") == "factuur" and i.get("due_date") and not i.get("paid_on"):
+            due = _parse(i.get("due_date"))
+            if not due:
+                continue
+            days = (due - date.today()).days
+            if days < 0:
+                checks.append({"level": "error", "code": "termijn_overdue",
+                               "message": f"Termijn van '{i.get('supplier', '?')}' is {-days} dagen over de vervaldatum en nog niet betaald."})
+            elif days <= 14 and not i.get("submitted_to_bank"):
+                checks.append({"level": "warning", "code": "termijn_due",
+                               "message": f"Termijn van '{i.get('supplier', '?')}' vervalt over {days} dagen en is nog niet ingediend bij de bank."})
+            elif days <= 7:
+                checks.append({"level": "warning", "code": "termijn_due",
+                               "message": f"Termijn van '{i.get('supplier', '?')}' vervalt over {days} dagen."})
 
     controle = round(start - paid_out - submitted_not_paid - still_to_submit - freely_available, 2)
     timeline = _build_timeline(depot, depot_invoices, start, paid_out,
@@ -333,19 +358,26 @@ def compute_pots_summary(pots, variable_expenses, year, months_elapsed, current_
         total_monthly += monthly
         spent_ytd = 0.0
         spent_month = 0.0
+        spent_by_month = {}
         for ve in variable_expenses:
             if ve.get("category") in cats and str(ve.get("month", ""))[:4] == str(year):
                 mm = int(str(ve["month"])[5:7])
                 amt = float(ve.get("amount") or 0)
+                spent_by_month[mm] = spent_by_month.get(mm, 0) + amt
                 if mm <= months_elapsed:
                     spent_ytd += amt
                 if mm == current_month:
                     spent_month += amt
         allocated = round(monthly * months_elapsed, 2)
+        history = []
+        cum_spent = 0.0
+        for m in range(1, max(months_elapsed, 1) + 1):
+            cum_spent += spent_by_month.get(m, 0)
+            history.append({"m": m, "balance": round(monthly * m - cum_spent, 2)})
         out.append({
             "pot_id": pot["pot_id"], "name": pot.get("name"), "categories": cats,
             "monthly_amount": round(monthly, 2), "allocated": allocated,
             "spent": round(spent_ytd, 2), "balance": round(allocated - spent_ytd, 2),
-            "spent_month": round(spent_month, 2),
+            "spent_month": round(spent_month, 2), "history": history,
         })
     return {"pots": out, "total_monthly": round(total_monthly, 2)}

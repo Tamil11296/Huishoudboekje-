@@ -9,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { ResponsiveContainer, AreaChart, Area } from "recharts";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -89,6 +90,21 @@ export default function Pots() {
                   <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{t("pot_balance")}</div>
                   <div className={`font-num font-bold text-3xl mt-1 ${p.balance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(p.balance)}</div>
                 </div>
+                {p.history && p.history.length > 1 && (
+                  <div className="h-12" data-testid={`pot-history-${p.pot_id}`}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <AreaChart data={p.history} margin={{ top: 2, bottom: 0, left: 0, right: 0 }}>
+                        <defs>
+                          <linearGradient id={`pg-${p.pot_id}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#059669" stopOpacity={0.35} />
+                            <stop offset="100%" stopColor="#059669" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <Area type="monotone" dataKey="balance" stroke="#059669" strokeWidth={2} fill={`url(#pg-${p.pot_id})`} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
                 <div>
                   <div className="flex justify-between text-xs text-muted-foreground mb-1">
                     <span>{t("pot_spent")}: {eur(p.spent)}</span>

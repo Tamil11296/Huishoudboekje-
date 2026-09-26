@@ -20,6 +20,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 
 const statusStyle = {
   afgesloten: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -57,6 +60,7 @@ export default function Dashboard() {
   const [year, setYear] = useState(currentHousehold?.dashboard_year || new Date().getFullYear());
   const [insights, setInsights] = useState(null);
   const [insLoading, setInsLoading] = useState(false);
+  const [selectedCat, setSelectedCat] = useState(null);
 
   useEffect(() => {
     if (!currentId) return;
@@ -200,11 +204,13 @@ export default function Dashboard() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="font-heading text-lg font-semibold mb-4">{t("category_breakdown")}</h2>
+          <h2 className="font-heading text-lg font-semibold mb-1">{t("category_breakdown")}</h2>
+          <p className="text-xs text-muted-foreground mb-3">{t("click_category")}</p>
           <div className="h-64" data-testid="category-pie">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}
+                     className="cursor-pointer" onClick={(d) => d && setSelectedCat(d.name)}>
                   {categoryData.map((entry, i) => (
                     <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                   ))}
@@ -260,6 +266,9 @@ export default function Dashboard() {
                 <TableHead className="text-right">{t("fixed_expenses")}</TableHead>
                 <TableHead className="text-right">{t("variable_expenses")}</TableHead>
                 <TableHead className="text-right">{t("over")}</TableHead>
+                {data.persons.map((p) => (
+                  <TableHead key={p.person_id} className="text-right">{p.name}</TableHead>
+                ))}
                 <TableHead className="text-right">{t("cumulative")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -278,6 +287,11 @@ export default function Dashboard() {
                   <TableCell className={`text-right font-num font-semibold ${m.over >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
                     {eur(m.over)}
                   </TableCell>
+                  {data.persons.map((p) => (
+                    <TableCell key={p.person_id} className={`text-right font-num ${(m.per_person[p.person_id]?.net || 0) >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                      {eur(m.per_person[p.person_id]?.net)}
+                    </TableCell>
+                  ))}
                   <TableCell className="text-right font-num text-muted-foreground">{eur(m.cumulative)}</TableCell>
                 </TableRow>
               ))}
@@ -285,6 +299,21 @@ export default function Dashboard() {
           </Table>
         </div>
       </Card>
+
+      <Dialog open={!!selectedCat} onOpenChange={(o) => !o && setSelectedCat(null)}>
+        <DialogContent className="bg-popover" data-testid="category-detail-dialog">
+          <DialogHeader><DialogTitle className="font-heading">{selectedCat}</DialogTitle></DialogHeader>
+          <div className="space-y-1.5 max-h-[60vh] overflow-y-auto">
+            {(data.category_items?.[selectedCat] || []).map((it, i) => (
+              <div key={i} className="flex items-center justify-between text-sm py-1.5 border-b border-border/60 last:border-0">
+                <span>{it.description}</span>
+                <span className="font-num font-medium">{eur(it.amount)}</span>
+              </div>
+            ))}
+            {!(data.category_items?.[selectedCat] || []).length && <p className="text-sm text-muted-foreground">{t("none_yet")}</p>}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
