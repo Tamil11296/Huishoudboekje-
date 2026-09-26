@@ -1,5 +1,8 @@
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
+import {
+  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+} from "recharts";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Wallet, Banknote, Send, FileClock, PiggyBank, CalendarClock,
@@ -175,6 +178,25 @@ export default function BouwdepotPage() {
           </motion.div>
 
           <ControlCheckPanel checks={depot.checks} reconciled={depot.reconciled} />
+
+          {depot.timeline && depot.timeline.length > 1 && (
+            <Card className="p-6">
+              <h2 className="font-heading text-lg font-semibold mb-4">{t("drawdown_title")}</h2>
+              <div className="h-72" data-testid="bouwdepot-drawdown-chart">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={depot.timeline} margin={{ left: -10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(214 32% 91%)" vertical={false} />
+                    <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="hsl(215 16% 47%)" />
+                    <YAxis tick={{ fontSize: 11 }} stroke="hsl(215 16% 47%)" tickFormatter={(v) => `€${Math.round(v / 1000)}k`} />
+                    <Tooltip formatter={(v) => eur(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(214 32% 91%)" }} />
+                    <Legend />
+                    <Line type="monotone" dataKey="actual" name={t("actual")} stroke="#0f172a" strokeWidth={2.5} connectNulls dot={{ r: 3 }} />
+                    <Line type="monotone" dataKey="forecast" name={t("forecast")} stroke="#059669" strokeWidth={2} strokeDasharray="5 4" connectNulls dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+          )}
 
           <Card className="p-0 overflow-hidden">
             <div className="flex items-center justify-between p-5">

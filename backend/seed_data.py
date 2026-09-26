@@ -127,3 +127,23 @@ async def seed_demo(db, owner):
     await db.bouwdepots.insert_one(depot)
     await db.bouwposten.insert_many(bouwposten)
     await db.invoices.insert_many(invoices)
+
+
+async def ensure_demo_projects(db, hid):
+    """Idempotently add a demo savings project (e.g. baby) to the demo household."""
+    if await db.projects.find_one({"household_id": hid}):
+        return
+    proj_id = new_id("proj")
+    await db.projects.insert_one({
+        "project_id": proj_id, "household_id": hid, "name": "Kindje op komst",
+        "target_date": "2027-03-01", "already_saved": 2500, "note": ""})
+    await db.project_items.insert_many([
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+         "name": "Babykamer & meubels", "amount": 2200, "note": ""},
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+         "name": "Kinderwagen & autostoel", "amount": 1400, "note": ""},
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+         "name": "Verlof / inkomstenbuffer", "amount": 6000, "note": ""},
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+         "name": "Kleding & startspullen", "amount": 900, "note": ""},
+    ])

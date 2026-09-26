@@ -10,6 +10,7 @@ import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import IncomeExpenses from "@/pages/IncomeExpenses";
 import BouwdepotPage from "@/pages/BouwdepotPage";
+import Projects from "@/pages/Projects";
 import Settings from "@/pages/Settings";
 import Header from "@/components/Header";
 
@@ -83,6 +84,16 @@ function AppRouter() {
           <Protected>
             <Shell>
               <BouwdepotPage />
+            </Shell>
+          </Protected>
+        }
+      />
+      <Route
+        path="/projecten"
+        element={
+          <Protected>
+            <Shell>
+              <Projects />
             </Shell>
           </Protected>
         }

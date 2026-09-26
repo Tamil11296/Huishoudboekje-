@@ -2,12 +2,15 @@ import React, { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
+  PieChart, Pie, Cell, AreaChart, Area, ReferenceLine,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
+  FileSpreadsheet, FileText,
 } from "lucide-react";
-import api from "@/lib/api";
+import api, { downloadFile } from "@/lib/api";
 import { eur, pct } from "@/lib/format";
+import { Button } from "@/components/ui/button";
 import { useApp } from "@/context/AppContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +26,9 @@ const statusStyle = {
   lopend: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200",
   prognose: "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200",
 };
+
+const PIE_COLORS = ["#0f172a", "#059669", "#f59e0b", "#6366f1", "#ec4899",
+  "#14b8a6", "#ef4444", "#8b5cf6", "#0ea5e9", "#84cc16"];
 
 function Kpi({ icon: Icon, label, value, tone, sub }) {
   const toneCls =
@@ -74,6 +80,8 @@ export default function Dashboard() {
   }));
 
   const years = [year - 1, year, year + 1];
+  const savingsData = data.months.map((m) => ({ name: m.label.slice(0, 3), [t("over")]: m.over }));
+  const categoryData = Object.entries(data.expense_by_category || {}).map(([name, value]) => ({ name, value }));
 
   return (
     <div className="space-y-8">
@@ -82,16 +90,26 @@ export default function Dashboard() {
           <h1 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight">{t("nav_dashboard")}</h1>
           <p className="text-muted-foreground mt-1">{currentHousehold?.name} · {year}</p>
         </div>
-        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-          <SelectTrigger className="w-32" data-testid="year-select">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {years.map((y) => (
-              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+            <SelectTrigger className="w-28" data-testid="year-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {years.map((y) => (
+                <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" className="gap-1" data-testid="export-pdf-btn"
+                  onClick={() => downloadFile(`/households/${currentId}/export/pdf`, `${currentHousehold?.name || "overzicht"}.pdf`)}>
+            <FileText className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" data-testid="export-excel-btn"
+                  onClick={() => downloadFile(`/households/${currentId}/export/excel`, `${currentHousehold?.name || "overzicht"}.xlsx`)}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-testid="dashboard-kpis">
@@ -124,6 +142,52 @@ export default function Dashboard() {
           </ResponsiveContainer>
         </div>
       </Card>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-heading text-lg font-semibold">{t("monthly_savings")}</h2>
+            <span className="text-sm text-muted-foreground">
+              {t("avg_monthly_saving")}: <span className="font-num font-semibold text-emerald-600">{eur(a.avg_monthly_over)}</span>
+            </span>
+          </div>
+          <div className="h-64" data-testid="savings-chart">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={savingsData} margin={{ left: -10 }}>
+                <defs>
+                  <linearGradient id="savg" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#059669" stopOpacity={0.4} />
+                    <stop offset="100%" stopColor="#059669" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(214 32% 91%)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(215 16% 47%)" />
+                <YAxis tick={{ fontSize: 12 }} stroke="hsl(215 16% 47%)" tickFormatter={(v) => `€${Math.round(v / 1000)}k`} />
+                <Tooltip formatter={(v) => eur(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(214 32% 91%)" }} />
+                <ReferenceLine y={a.avg_monthly_over} stroke="#0f172a" strokeDasharray="4 4" />
+                <Area type="monotone" dataKey={t("over")} stroke="#059669" strokeWidth={2} fill="url(#savg)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h2 className="font-heading text-lg font-semibold mb-4">{t("category_breakdown")}</h2>
+          <div className="h-64" data-testid="category-pie">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={categoryData} dataKey="value" nameKey="name" innerRadius={55} outerRadius={90} paddingAngle={2}>
+                  {categoryData.map((entry, i) => (
+                    <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(v) => eur(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(214 32% 91%)" }} />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
 
       <div>
         <h2 className="font-heading text-xl font-bold mb-4">{t("per_person")} — {t("what_left")}</h2>

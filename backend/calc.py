@@ -78,6 +78,7 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
     months = []
     cumulative = 0.0
     annual = {"income": 0, "fixed": 0, "variable": 0, "expenses": 0, "over": 0}
+    expense_by_category = {}
     per_person_year = {p["person_id"]: {"income": 0, "own": 0, "joint_share": 0, "net": 0}
                        for p in persons}
 
@@ -100,6 +101,8 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             if not amt:
                 continue
             fixed_total += amt
+            _cat = ex.get("category") or "Overig"
+            expense_by_category[_cat] = expense_by_category.get(_cat, 0) + amt
             pb = ex.get("paid_by", "joint")
             if pb in own_expense:
                 own_expense[pb] += amt
@@ -113,6 +116,8 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
                 continue
             amt = float(ve.get("amount") or 0)
             variable_total += amt
+            _cat = ve.get("category") or "Overig"
+            expense_by_category[_cat] = expense_by_category.get(_cat, 0) + amt
             pb = ve.get("paid_by", "joint")
             if pb in own_expense:
                 own_expense[pb] += amt
@@ -164,13 +169,16 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
     for k in annual:
         annual[k] = round(annual[k], 2)
     annual["savings_rate"] = round((annual["over"] / annual["income"]) * 100, 1) if annual["income"] > 0 else 0.0
+    annual["avg_monthly_over"] = round(annual["over"] / 12, 2)
     for pid in per_person_year:
         for k in per_person_year[pid]:
             per_person_year[pid][k] = round(per_person_year[pid][k], 2)
 
     return {"year": year, "months": months, "annual": annual,
             "per_person_year": per_person_year, "persons": persons,
-            "split_rule": rule}
+            "split_rule": rule,
+            "expense_by_category": {k: round(v, 2) for k, v in
+                                    sorted(expense_by_category.items(), key=lambda x: -x[1])}}
 
 
 def compute_bouwpost_rollup(bp, invoices):
@@ -228,14 +236,22 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
             checks.append({"level": "error", "code": "invoice_no_bouwpost",
                            "message": f"Factuur/offerte '{i.get('supplier', '?')}' heeft geen bouwpost."})
     for p in posts:
-        if p["commitment"] > p["budget"] + 0.005:
-            checks.append({"level": "warning", "code": "budget_overrun",
+        if p["budget"] > 0 and p["commitment"] > p["budget"] + 0.005:
+            checks.append({"level": "error", "code": "budget_overrun",
                            "message": f"Bouwpost '{p['name']}' overschrijdt budget met €{round(p['commitment'] - p['budget'], 2)}."})
+        elif p["budget"] > 0 and p["commitment"] >= p["budget"] * 0.9:
+            checks.append({"level": "warning", "code": "budget_near",
+                           "message": f"Bouwpost '{p['name']}' nadert het budget ({round(p['commitment'] / p['budget'] * 100)}%)."})
     if freely_available < -0.005:
         checks.append({"level": "error", "code": "depot_overdrawn",
                        "message": f"Verplichtingen overschrijden het bouwdepot met €{round(-freely_available, 2)}."})
+    elif start > 0 and freely_available < start * 0.1:
+        checks.append({"level": "warning", "code": "depot_low",
+                       "message": f"Bijna leeg: nog maar €{round(freely_available, 2)} vrij besteedbaar in het bouwdepot."})
 
     controle = round(start - paid_out - submitted_not_paid - still_to_submit - freely_available, 2)
+    timeline = _build_timeline(depot, depot_invoices, start, paid_out,
+                               submitted_not_paid, still_to_submit)
 
     return {
         "bouwdepot_id": depot["bouwdepot_id"],
@@ -254,4 +270,53 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
         "checks": checks,
         "reconciled": len([c for c in checks if c["level"] == "error"]) == 0,
         "controle": controle,
+        "timeline": timeline,
     }
+
+
+def _build_timeline(depot, invoices, start, paid_out, submitted_not_paid, still_to_submit):
+    start_date = _parse(depot.get("start_date")) or date.today()
+    end_date = _parse(depot.get("end_date"))
+    today = date.today()
+    paid = sorted([(_parse(i.get("paid_on")), float(i.get("invoice_amount") or 0))
+                   for i in invoices if i.get("paid_on") and _parse(i.get("paid_on"))],
+                  key=lambda x: x[0])
+    pts = {}
+    bal = start
+    pts[start_date.isoformat()] = {"date": start_date.isoformat(), "actual": round(bal, 2), "forecast": None}
+    for d, amt in paid:
+        bal -= amt
+        pts[d.isoformat()] = {"date": d.isoformat(), "actual": round(bal, 2), "forecast": None}
+    actual_today = round(start - paid_out, 2)
+    tk = today.isoformat()
+    if tk not in pts:
+        pts[tk] = {"date": tk, "actual": actual_today, "forecast": actual_today}
+    else:
+        pts[tk]["forecast"] = actual_today
+    if end_date and end_date > today:
+        final = round(actual_today - submitted_not_paid - still_to_submit, 2)
+        pts[end_date.isoformat()] = {"date": end_date.isoformat(), "actual": None, "forecast": final}
+    return [pts[k] for k in sorted(pts.keys())]
+
+
+def compute_projects_summary(projects, items, avg_monthly_over):
+    today = date.today()
+    out = []
+    for pr in projects:
+        pitems = [i for i in items if i.get("project_id") == pr["project_id"]]
+        total = sum(float(i.get("amount") or 0) for i in pitems)
+        saved = float(pr.get("already_saved") or 0)
+        remaining = max(total - saved, 0)
+        td = _parse(pr.get("target_date"))
+        months_left = max((td.year - today.year) * 12 + (td.month - today.month), 1) if td else 12
+        required = round(remaining / months_left, 2)
+        out.append({
+            "project_id": pr["project_id"], "name": pr.get("name"),
+            "target_date": pr.get("target_date"),
+            "total_cost": round(total, 2), "already_saved": round(saved, 2),
+            "remaining": round(remaining, 2), "months_left": months_left,
+            "required_monthly": required, "item_count": len(pitems), "items": pitems,
+            "feasible": required <= avg_monthly_over,
+            "avg_monthly_over": round(avg_monthly_over, 2),
+        })
+    return out

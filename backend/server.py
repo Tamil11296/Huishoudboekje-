@@ -1,14 +1,16 @@
 import os
 import logging
 from datetime import datetime, timezone
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Body
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Body, Response
 from starlette.middleware.cors import CORSMiddleware
 
 from deps import db, get_current_user, new_id, hash_password, verify_password, log_change, public_user
 from auth import router as auth_router
-from calc import compute_dashboard, compute_bouwdepot_summary, compute_bouwpost_rollup
+from calc import (compute_dashboard, compute_bouwdepot_summary, compute_bouwpost_rollup,
+                  compute_projects_summary)
 from emailer import send_email, invite_email_html
-from seed_data import seed_demo
+from seed_data import seed_demo, ensure_demo_projects
+from export import build_excel, build_pdf
 
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -260,6 +262,10 @@ register_crud("invoices", "invoices", "invoice_id", "inv",
               ["supplier", "bouwpost_id", "bouwdepot_id", "type", "amount_incl_vat",
                "valid_until", "status", "invoice_amount", "submitted_to_bank",
                "submitted_on", "paid_on", "description"])
+register_crud("projects", "projects", "project_id", "proj",
+              ["name", "target_date", "already_saved", "note"])
+register_crud("project-items", "project_items", "item_id", "pit",
+              ["project_id", "name", "amount", "note"])
 
 
 # ---------- dashboard ----------
@@ -282,6 +288,57 @@ async def bouwdepot_summary(hid: str, user: dict = Depends(get_current_user)):
     invoices = await db.invoices.find({"household_id": hid}, {"_id": 0}).to_list(2000)
     summaries = [compute_bouwdepot_summary(d, bouwposten, invoices) for d in depots]
     return {"depots": summaries, "invoices": invoices, "bouwposten": bouwposten}
+
+
+# ---------- projects & saving ----------
+@api_router.get("/households/{hid}/projects-summary")
+async def projects_summary(hid: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    year = hh.get("dashboard_year") or datetime.now(timezone.utc).year
+    incomes = await db.incomes.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    variable = await db.variable_expenses.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    dash = compute_dashboard(hh, incomes, fixed, variable, year)
+    avg = dash["annual"].get("avg_monthly_over", 0)
+    projects = await db.projects.find({"household_id": hid}, {"_id": 0}).to_list(100)
+    pitems = await db.project_items.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    return {"projects": compute_projects_summary(projects, pitems, avg), "avg_monthly_over": avg}
+
+
+# ---------- export ----------
+async def _gather_export(hid, hh):
+    year = hh.get("dashboard_year") or datetime.now(timezone.utc).year
+    incomes = await db.incomes.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    variable = await db.variable_expenses.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    dash = compute_dashboard(hh, incomes, fixed, variable, year)
+    depots = await db.bouwdepots.find({"household_id": hid}, {"_id": 0}).to_list(100)
+    bouwposten = await db.bouwposten.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    invoices = await db.invoices.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    depot_sum = [compute_bouwdepot_summary(d, bouwposten, invoices) for d in depots]
+    projects = await db.projects.find({"household_id": hid}, {"_id": 0}).to_list(100)
+    pitems = await db.project_items.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    projsum = compute_projects_summary(projects, pitems, dash["annual"].get("avg_monthly_over", 0))
+    return {"household": hh, "dashboard": dash, "depots": depot_sum,
+            "invoices": invoices, "projects": projsum}
+
+
+@api_router.get("/households/{hid}/export/{fmt}")
+async def export_household(hid: str, fmt: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    payload = await _gather_export(hid, hh)
+    if fmt == "excel":
+        data = build_excel(payload)
+        media = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        fn = "overzicht.xlsx"
+    elif fmt == "pdf":
+        data = build_pdf(payload)
+        media = "application/pdf"
+        fn = "overzicht.pdf"
+    else:
+        raise HTTPException(status_code=400, detail="Onbekend formaat")
+    return Response(content=data, media_type=media,
+                    headers={"Content-Disposition": f'attachment; filename="{fn}"'})
 
 
 # ---------- app wiring ----------
@@ -317,6 +374,9 @@ async def startup():
                                       {"$set": {"password_hash": hash_password(admin_password)}})
         owner = await db.users.find_one({"email": admin_email}, {"_id": 0})
         await seed_demo(db, owner)
+        demo = await db.households.find_one({"owner_id": owner["user_id"], "demo": True}, {"_id": 0})
+        if demo:
+            await ensure_demo_projects(db, demo["household_id"])
 
 
 @app.on_event("shutdown")

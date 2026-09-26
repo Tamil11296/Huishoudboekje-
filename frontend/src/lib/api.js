@@ -8,3 +8,15 @@ const api = axios.create({
 });
 
 export default api;
+
+export async function downloadFile(path, filename) {
+  const res = await api.get(path, { responseType: "blob" });
+  const url = URL.createObjectURL(res.data);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
