@@ -1,0 +1,28 @@
+{
+  "summary": "Iteration 2 follow-up testing of 4 new feature sets (drawdown chart, Excel+PDF export, smart warnings, new dashboard charts, Projecten & Sparen). Backend: 7/7 new pytest tests pass (dashboard expense_by_category + annual.avg_monthly_over present, bouwdepot-summary now includes 'timeline' array per depot, /export/excel returns 200 xlsx (>1KB), /export/pdf returns 200 %PDF binary, /projects-summary returns avg_monthly_over + demo 'Kindje op komst' with required_monthly=1333.33 and feasible=True, project + project-item CRUD works and summary updates, budget_overrun/budget_near warning triggers when accepted invoice exceeds a small bouwpost budget). Frontend E2E (owner login): dashboard now shows savings-chart (Spaarruimte per maand area chart w/ avg reference line, avg €4.796/mo) + category-pie (donut Uitgaven per categorie) + export-pdf-btn + export-excel-btn; both export buttons successfully triggered downloads (Huize Constantine.xlsx and Huize Constantine.pdf). Bouwdepot page shows bouwdepot-drawdown-chart 'Verloop bouwdepot' with solid Werkelijk line dropping on paid dates and dashed Prognose line to depot end (2026-12-31). Warnings visible on Bouwdepot: Keuken 95%, Badkamer 93%, Tuin&terras 95% (budget_near). Projecten & Sparen page (/projecten) loads via nav-nav_projects; demo 'Kindje op komst' card renders with Totale kosten €10.500, Nog nodig €8.000, Per maand sparen €1.333, 24% progress bar, 'Haalbaar met je overschot' feasibility badge, 4 kostenposten listed. add-project-btn opens dialog-project; created new project 'TEST_e2e_proj' persisted and card count grew from 1 to 2 (cleaned up after). Language toggle (data-testid=language-toggle) present and works. All existing flows (login, dashboard KPIs 92.800/35.248/57.552/62%, bouwdepot cockpit, income vs expense chart) still functional. No JS crashes on new pages/charts.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard (initial mount)", "issues": ["Recharts still logs benign 'width/height should be >0' warnings on first render before ResponsiveContainer measures - cosmetic only, all charts render correctly afterwards."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/backend/tests/test_backend_api.py",
+    "/app/test_reports/pytest/iter2_new_features.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Language-toggle testid is `language-toggle` (not `lang-toggle`) - matches previous nav testid naming inconsistency noted in iteration_1.",
+    "test_new_features.py uses a fallback default URL string to survive envs where REACT_APP_BACKEND_URL is not exported to shell; production tests should always rely on env var (per system rules)."
+  ],
+  "updated_files": ["/app/backend/tests/test_new_features.py"],
+  "success_rate": {"backend": "100% (7/7 new + 19/19 existing)", "frontend": "100% of tested new flows"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026!",
+  "seed_data_creation": "Demo project 'Kindje op komst' with 4 cost items auto-seeded via ensure_demo_projects. Test-created TEST_ project + item cleaned up.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "New pytest suite at /app/backend/tests/test_new_features.py. Login lands at `/` (not /dashboard) - use wait_for_load_state('networkidle') instead of wait_for_url('**/dashboard**'). Nav testids remain `nav-nav_<key>` (e.g. nav-nav_projects, nav-nav_bouwdepot). Export endpoints /api/households/{hid}/export/{excel|pdf} return files with correct content-type; frontend triggers browser downloads. Project dialog is `dialog-project`; add button is `add-project-btn`; item dialog is `dialog-item` with `add-item-btn-{projectId}`."
+}
