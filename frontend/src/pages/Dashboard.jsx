@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
-  FileSpreadsheet, FileText, Sparkles, AlertTriangle, Target,
+  FileSpreadsheet, FileText, Sparkles, AlertTriangle, Target, Coins,
 } from "lucide-react";
 import api, { downloadFile } from "@/lib/api";
 import { eur, pct } from "@/lib/format";
@@ -61,11 +61,15 @@ export default function Dashboard() {
   const [insights, setInsights] = useState(null);
   const [insLoading, setInsLoading] = useState(false);
   const [selectedCat, setSelectedCat] = useState(null);
+  const [pots, setPots] = useState(null);
 
   useEffect(() => {
     if (!currentId) return;
     api.get(`/households/${currentId}/dashboard`, { params: { year } })
       .then((r) => setData(r.data))
+      .catch(() => {});
+    api.get(`/households/${currentId}/pots-summary`)
+      .then((r) => setPots(r.data))
       .catch(() => {});
   }, [currentId, year]);
 
@@ -79,6 +83,9 @@ export default function Dashboard() {
     return <div className="text-muted-foreground">{t("loading")}</div>;
 
   const a = data.annual;
+  const potsMonthly = pots?.total_monthly || 0;
+  const potsAnnual = Math.round(potsMonthly * 12 * 100) / 100;
+  const annualFree = Math.round((a.over - potsAnnual) * 100) / 100;
   const chartData = data.months.map((m) => ({
     name: m.label.slice(0, 3),
     [t("income")]: m.income,
@@ -86,7 +93,11 @@ export default function Dashboard() {
   }));
 
   const years = [year - 1, year, year + 1];
-  const savingsData = data.months.map((m) => ({ name: m.label.slice(0, 3), [t("over")]: m.over }));
+  const savingsData = data.months.map((m) => ({
+    name: m.label.slice(0, 3),
+    [t("over")]: m.over,
+    [t("after_pots")]: Math.round((m.over - potsMonthly) * 100) / 100,
+  }));
   const categoryData = Object.entries(data.expense_by_category || {}).map(([name, value]) => ({ name, value }));
   const catBudgets = data.category_budgets || [];
   const overCount = catBudgets.filter((c) => c.over_month).length;
@@ -138,6 +149,7 @@ export default function Dashboard() {
           label={a.over >= 0 ? t("surplus") : t("deficit")}
           value={eur(a.over)}
           tone={a.over >= 0 ? "pos" : "neg"}
+          sub={potsMonthly > 0 ? `${t("reserved_pots")}: −${eur(potsAnnual)} · ${t("after_pots")}: ${eur(annualFree)}` : undefined}
         />
         <Kpi icon={PiggyBank} label={t("savings_rate")} value={pct(a.savings_rate)}
              tone={a.savings_rate >= 0 ? "pos" : "neg"} />
@@ -192,6 +204,9 @@ export default function Dashboard() {
             <h2 className="font-heading text-lg font-semibold">{t("monthly_savings")}</h2>
             <span className="text-sm text-muted-foreground">
               {t("avg_monthly_saving")}: <span className="font-num font-semibold text-emerald-600">{eur(a.avg_monthly_over)}</span>
+              {potsMonthly > 0 && (
+                <> · {t("after_pots")}: <span className="font-num font-semibold text-indigo-600 dark:text-indigo-400">{eur(a.avg_monthly_over - potsMonthly)}</span></>
+              )}
             </span>
           </div>
           <div className="h-64" data-testid="savings-chart">
@@ -202,6 +217,10 @@ export default function Dashboard() {
                     <stop offset="0%" stopColor="#059669" stopOpacity={0.4} />
                     <stop offset="100%" stopColor="#059669" stopOpacity={0} />
                   </linearGradient>
+                  <linearGradient id="safter" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(214 32% 91%)" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="hsl(215 16% 47%)" />
@@ -209,6 +228,10 @@ export default function Dashboard() {
                 <Tooltip formatter={(v) => eur(v)} contentStyle={{ borderRadius: 12, border: "1px solid hsl(214 32% 91%)" }} />
                 <ReferenceLine y={a.avg_monthly_over} stroke="#0f172a" strokeDasharray="4 4" />
                 <Area type="monotone" dataKey={t("over")} stroke="#059669" strokeWidth={2} fill="url(#savg)" />
+                {potsMonthly > 0 && (
+                  <Area type="monotone" dataKey={t("after_pots")} stroke="#6366f1" strokeWidth={2} fill="url(#safter)" />
+                )}
+                {potsMonthly > 0 && <Legend />}
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -276,6 +299,33 @@ export default function Dashboard() {
       ) : (
         <Card className="p-6 text-sm text-muted-foreground flex items-center gap-2" data-testid="category-budget-empty">
           <Target className="h-4 w-4" /> {t("no_budgets_set")}
+        </Card>
+      )}
+
+      {pots?.pots?.length > 0 && (
+        <Card className="p-6" data-testid="dashboard-pots-block">
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="font-heading text-lg font-semibold flex items-center gap-2">
+              <Coins className="h-5 w-5 text-slate-400" /> {t("nav_pots")}
+            </h2>
+            <span className="text-sm text-muted-foreground">
+              {t("reserved_pots")}: <span className="font-num font-semibold">{eur(potsMonthly)}/{t("month").toLowerCase()}</span>
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mb-4">
+            {t("after_pots")}: <span className={`font-num font-semibold ${annualFree >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(annualFree)}</span> / {t("annual").toLowerCase()}
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pots.pots.map((p) => (
+              <div key={p.pot_id} className="flex items-center justify-between rounded-lg border border-border p-3" data-testid={`dashboard-pot-${p.pot_id}`}>
+                <div className="min-w-0">
+                  <div className="font-medium text-sm truncate">{p.name}</div>
+                  <div className="text-xs text-muted-foreground font-num">{eur(p.monthly_amount)}/{t("month").toLowerCase()}</div>
+                </div>
+                <div className={`font-num font-bold shrink-0 ${p.balance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(p.balance)}</div>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
 
