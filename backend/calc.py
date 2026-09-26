@@ -81,7 +81,6 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
     cumulative = 0.0
     annual = {"income": 0, "fixed": 0, "variable": 0, "expenses": 0, "over": 0}
     expense_by_category = {}
-    cur_month_cat = {}
     cat_items = {}
     per_person_year = {p["person_id"]: {"income": 0, "own": 0, "joint_share": 0, "net": 0}
                        for p in persons}
@@ -107,8 +106,6 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             fixed_total += amt
             _cat = ex.get("category") or "Overig"
             expense_by_category[_cat] = expense_by_category.get(_cat, 0) + amt
-            if m == cur_month:
-                cur_month_cat[_cat] = cur_month_cat.get(_cat, 0) + amt
             _desc = ex.get("description") or _cat
             cat_items.setdefault(_cat, {})
             cat_items[_cat][_desc] = cat_items[_cat].get(_desc, 0) + amt
@@ -127,8 +124,6 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             variable_total += amt
             _cat = ve.get("category") or "Overig"
             expense_by_category[_cat] = expense_by_category.get(_cat, 0) + amt
-            if m == cur_month:
-                cur_month_cat[_cat] = cur_month_cat.get(_cat, 0) + amt
             _desc = ve.get("description") or _cat
             cat_items.setdefault(_cat, {})
             cat_items[_cat][_desc] = cat_items[_cat].get(_desc, 0) + amt
@@ -193,36 +188,11 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
             "split_rule": rule,
             "current_month": cur_month,
             "current_month_label": MONTHS_NL[cur_month] if cur_month else "",
-            "category_budgets": _category_budget_status(
-                household.get("category_budgets", {}), cur_month_cat, expense_by_category),
             "expense_by_category": {k: round(v, 2) for k, v in
                                     sorted(expense_by_category.items(), key=lambda x: -x[1])},
             "category_items": {c: sorted([{"description": d, "amount": round(v, 2)}
                                           for d, v in items.items()], key=lambda x: -x["amount"])
                                for c, items in cat_items.items()}}
-
-
-def _category_budget_status(category_budgets, cur_month_cat, expense_by_category):
-    out = []
-    for cat, monthly in (category_budgets or {}).items():
-        monthly = float(monthly or 0)
-        if monthly <= 0:
-            continue
-        spent_month = round(cur_month_cat.get(cat, 0), 2)
-        spent_year = round(expense_by_category.get(cat, 0), 2)
-        annual_budget = round(monthly * 12, 2)
-        out.append({
-            "category": cat,
-            "monthly_budget": round(monthly, 2),
-            "annual_budget": annual_budget,
-            "spent_month": spent_month,
-            "spent_year": spent_year,
-            "month_pct": round(spent_month / monthly * 100) if monthly else 0,
-            "year_pct": round(spent_year / annual_budget * 100) if annual_budget else 0,
-            "over_month": spent_month > monthly + 0.005,
-            "over_year": spent_year > annual_budget + 0.005,
-        })
-    return sorted(out, key=lambda x: -x["month_pct"])
 
 
 def compute_bouwpost_rollup(bp, invoices):

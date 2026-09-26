@@ -88,7 +88,7 @@ async def get_household(hid: str, user: dict = Depends(get_current_user)):
 @api_router.patch("/households/{hid}")
 async def update_household(hid: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
     hh = await require_household(hid, user)
-    updates = {k: body[k] for k in ("name", "split_rule", "dashboard_year", "quote_statuses", "category_budgets")
+    updates = {k: body[k] for k in ("name", "split_rule", "dashboard_year", "quote_statuses")
                if k in body}
     if updates:
         await db.households.update_one({"household_id": hid}, {"$set": updates})
@@ -391,19 +391,15 @@ async def _ai_context(hid, hh):
                    for p in dash["persons"])
     if pp:
         L.append("Per persoon: " + pp)
-    if dash.get("category_budgets"):
-        cb = "; ".join(
-            f"{c['category']}: deze maand €{c['spent_month']} van €{c['monthly_budget']} "
-            f"({c['month_pct']}%{', OVER BUDGET' if c['over_month'] else ''}), "
-            f"jaar €{c['spent_year']} van €{c['annual_budget']}"
-            for c in dash["category_budgets"])
-        L.append("Categorie-budgetten (maand=" + (dash.get("current_month_label") or "?") + "): " + cb)
     for d in depsum:
         L.append(f"Bouwdepot '{d['name']}': start €{d['start_amount']}, uitbetaald €{d['paid_out']}, "
                  f"vrij besteedbaar €{d['freely_available']}, dagen resterend {d['days_remaining']}.")
     if potsum["pots"]:
-        L.append("Potjes: " + ", ".join(f"{p['name']} saldo €{p['balance']} (€{p['monthly_amount']}/mnd)"
-                                         for p in potsum["pots"]))
+        def _pot_line(p):
+            over = p["monthly_amount"] > 0 and p["spent_month"] > p["monthly_amount"]
+            return (f"{p['name']}: deze maand besteed €{p['spent_month']} van €{p['monthly_amount']}/mnd (budget)"
+                    f"{', OVER BUDGET' if over else ''}, saldo €{p['balance']}")
+        L.append("Potjes (budget = maandbedrag): " + "; ".join(_pot_line(p) for p in potsum["pots"]))
     return "\n".join(L)
 
 

@@ -207,6 +207,7 @@ export const translations = {
     save_budgets: "Budgetten opslaan",
     reserved_pots: "Gereserveerd in potjes",
     after_pots: "Vrij na potjes",
+    pots_over_budget: "potje(s) boven het maandbedrag deze maand",
   },
   en: {
     app_name: "Household Budget & Building Deposit",
@@ -407,5 +408,6 @@ export const translations = {
     save_budgets: "Save budgets",
     reserved_pots: "Reserved in envelopes",
     after_pots: "Free after envelopes",
+    pots_over_budget: "envelope(s) over the monthly amount this month",
   },
 };
