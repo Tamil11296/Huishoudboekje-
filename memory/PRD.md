@@ -38,6 +38,10 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
 - 2026-06 v7 (doelen + snelinvoer):
   - Doel-prioriteit (handmatig), "Behaald"-historie met datum, en verdeel-voorbeeld vóór bevestigen (POST /goals/distribute?apply=false → plan, apply=true → opslaan).
   - Dashboard snel-uitgave-balk: categorie, bedrag, omschrijving, maand, **persoon kiezen** (paid_by), **AI-categorie** (onBlur/knop → /ai/categorize), en **snelknoppen** (veelgebruikte categorie+bedrag, één-tik). Geverifieerd via curl + screenshot.
+- 2026-06 v8:
+  - Doel-financiering: `funded_by` (gezamenlijk/persoon) per doel, keuze in dialoog; "Slim verdelen" verdeelt per persoon diens eigen maandoverschot (net/12), restant stroomt naar gezamenlijke doelen.
+  - Bouwdepot auto-status: `derive_invoice_status` (offerte: ontvangen/geaccepteerd; factuur: betaald/ingediend/ingepland/te laat) met gekleurde badges; `overdue_count` + te-laat-banner op de bouwdepotpagina.
+  - Offerte-bijlage: PDF/afbeelding upload via Emergent object storage (backend/storage.py), opgeslagen als invoice.attachment; upload-knop (paperclip) + inline bekijken/download per regel. Backend curl (upload/download) + FE screenshot geverifieerd.
 
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.

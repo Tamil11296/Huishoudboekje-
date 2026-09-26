@@ -243,7 +243,7 @@ export default function Goals() {
         })}
       </div>
 
-      {dialog && <GoalDialog open onClose={() => setDialog(null)} initial={dialog.initial} cats={cats} onSubmit={save} />}
+      {dialog && <GoalDialog open onClose={() => setDialog(null)} initial={dialog.initial} cats={cats} persons={currentHousehold?.persons || []} onSubmit={save} />}
       {itemDialog && (
         <RecordDialog open onOpenChange={(o) => !o && setItemDialog(null)} title={t("add_cost_item")}
           fields={[
@@ -306,13 +306,14 @@ export default function Goals() {
   );
 }
 
-function GoalDialog({ open, onClose, initial, cats, onSubmit }) {
+function GoalDialog({ open, onClose, initial, cats, persons, onSubmit }) {
   const { t } = useApp();
   const [name, setName] = useState(initial?.name || "");
   const [amount, setAmount] = useState(initial?.monthly_amount ?? "");
   const [targetDate, setTargetDate] = useState(initial?.target_date || "");
   const [alreadySaved, setAlreadySaved] = useState(initial?.already_saved ?? "");
   const [priority, setPriority] = useState(initial?.priority ?? "");
+  const [fundedBy, setFundedBy] = useState(initial?.funded_by || "joint");
   const [sel, setSel] = useState(initial?.categories || []);
   const [busy, setBusy] = useState(false);
   const toggle = (c) => setSel((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]));
@@ -324,6 +325,7 @@ function GoalDialog({ open, onClose, initial, cats, onSubmit }) {
         name, monthly_amount: amount, categories: sel,
         target_date: targetDate || null, already_saved: alreadySaved === "" ? 0 : alreadySaved,
         priority: priority === "" ? null : Number(priority),
+        funded_by: fundedBy,
       });
     } finally { setBusy(false); }
   };
@@ -350,6 +352,21 @@ function GoalDialog({ open, onClose, initial, cats, onSubmit }) {
                       : "border-border text-muted-foreground hover:border-slate-400"
                   }`}>
                   {c}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>{t("funded_by")}</Label>
+            <div className="flex flex-wrap gap-2">
+              {[{ id: "joint", name: t("joint") }, ...persons.map((p) => ({ id: p.person_id, name: p.name }))].map((o) => (
+                <button type="button" key={o.id} onClick={() => setFundedBy(o.id)} data-testid={`funder-${o.id}`}
+                  className={`px-3 py-1 rounded-full text-sm border transition-colors ${
+                    fundedBy === o.id
+                      ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
+                      : "border-border text-muted-foreground hover:border-slate-400"
+                  }`}>
+                  {o.name}
                 </button>
               ))}
             </div>

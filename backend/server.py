@@ -9,9 +9,13 @@ from starlette.middleware.cors import CORSMiddleware
 from deps import db, get_current_user, new_id, hash_password, verify_password, log_change, public_user
 from auth import router as auth_router
 from calc import (compute_dashboard, compute_bouwdepot_summary, compute_bouwpost_rollup,
-                  compute_projects_summary, compute_pots_summary, compute_goals_summary)
+                  compute_projects_summary, compute_pots_summary, compute_goals_summary,
+                  derive_invoice_status)
 from emailer import send_email, invite_email_html
 from seed_data import seed_demo, ensure_demo_pots, ensure_demo_goal, migrate_projects_to_goals
+import uuid
+from fastapi import UploadFile, File
+from storage import put_object, get_object, APP_NAME
 from export import build_excel, build_pdf
 from llm import ask_claude
 
@@ -267,7 +271,7 @@ register_crud("invoices", "invoices", "invoice_id", "inv",
                "submitted_on", "paid_on", "description",
                "parent_quote_id", "termijn", "due_date", "paid_amount"])
 register_crud("pots", "pots", "pot_id", "pot",
-              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved", "priority"])
+              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved", "priority", "funded_by"])
 register_crud("projects", "projects", "project_id", "proj",
               ["name", "target_date", "already_saved", "note"])
 register_crud("project-items", "project_items", "item_id", "pit",
@@ -293,7 +297,45 @@ async def bouwdepot_summary(hid: str, user: dict = Depends(get_current_user)):
     bouwposten = await db.bouwposten.find({"household_id": hid}, {"_id": 0}).to_list(1000)
     invoices = await db.invoices.find({"household_id": hid}, {"_id": 0}).to_list(2000)
     summaries = [compute_bouwdepot_summary(d, bouwposten, invoices) for d in depots]
-    return {"depots": summaries, "invoices": invoices, "bouwposten": bouwposten}
+    overdue = 0
+    out = []
+    for i in invoices:
+        s = derive_invoice_status(i)
+        if s == "telaat":
+            overdue += 1
+        out.append({**i, "derived_status": s})
+    return {"depots": summaries, "invoices": out, "bouwposten": bouwposten, "overdue_count": overdue}
+
+
+@api_router.post("/households/{hid}/invoices/{invoice_id}/attachment")
+async def upload_invoice_attachment(hid: str, invoice_id: str,
+                                    file: UploadFile = File(...),
+                                    user: dict = Depends(get_current_user)):
+    await require_household(hid, user)
+    inv = await db.invoices.find_one({"invoice_id": invoice_id, "household_id": hid})
+    if not inv:
+        raise HTTPException(status_code=404, detail="Factuur/offerte niet gevonden")
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "bin"
+    path = f"{APP_NAME}/{hid}/{invoice_id}/{uuid.uuid4()}.{ext}"
+    data = await file.read()
+    ct = file.content_type or "application/octet-stream"
+    res = await put_object(path, data, ct)
+    att = {"path": res["path"], "filename": file.filename or f"bijlage.{ext}", "content_type": ct}
+    await db.invoices.update_one({"invoice_id": invoice_id, "household_id": hid}, {"$set": {"attachment": att}})
+    await log_change(hid, user, "bouwdepot", f"Bijlage toegevoegd aan '{inv.get('supplier', '?')}'")
+    return att
+
+
+@api_router.get("/households/{hid}/invoices/{invoice_id}/attachment")
+async def get_invoice_attachment(hid: str, invoice_id: str, user: dict = Depends(get_current_user)):
+    await require_household(hid, user)
+    inv = await db.invoices.find_one({"invoice_id": invoice_id, "household_id": hid}, {"_id": 0})
+    if not inv or not inv.get("attachment"):
+        raise HTTPException(status_code=404, detail="Geen bijlage")
+    att = inv["attachment"]
+    data, ct = await get_object(att["path"])
+    return Response(content=data, media_type=att.get("content_type", ct),
+                    headers={"Content-Disposition": f'inline; filename="{att.get("filename", "offerte")}"'})
 
 
 # ---------- projects & saving ----------
@@ -382,15 +424,14 @@ async def _goals_ctx(hid, hh):
     dash = compute_dashboard(hh, incomes, fixed, variable, year)
     avg = dash["annual"].get("avg_monthly_over", 0)
     goals = compute_goals_summary(pots, pitems, variable, year, cur_month, cur_month, avg)["goals"]
-    return goals, avg
+    return goals, avg, dash
 
 
 @api_router.post("/households/{hid}/goals/distribute")
 async def distribute_goals(hid: str, apply: bool = False, user: dict = Depends(get_current_user)):
     hh = await require_household(hid, user)
-    goals, avg = await _goals_ctx(hid, hh)
+    goals, avg, dash = await _goals_ctx(hid, hh)
     from datetime import date as _date
-    budget = max(avg, 0)
 
     def keyf(g):
         pr = g.get("priority")
@@ -403,19 +444,33 @@ async def distribute_goals(hid: str, apply: bool = False, user: dict = Depends(g
         return (pr, d)
 
     alloc = {g["pot_id"]: 0.0 for g in goals}
-    left = budget
-    for g in sorted([x for x in goals if x.get("has_target") and x.get("remaining", 0) > 0], key=keyf):
-        give = round(min(g["required_monthly"], max(left, 0)), 2)
-        alloc[g["pot_id"]] = give
-        left = round(left - give, 2)
-    cont = sorted([g for g in goals if not g.get("has_target")], key=keyf)
-    if cont and left > 0:
-        each = round(left / len(cont), 2)
-        for g in cont:
-            alloc[g["pot_id"]] = each
+
+    def fund(gs, budget):
+        left = max(budget, 0)
+        for g in sorted([x for x in gs if x.get("has_target") and x.get("remaining", 0) > 0], key=keyf):
+            give = round(min(g["required_monthly"], max(left, 0)), 2)
+            alloc[g["pot_id"]] = give
+            left = round(left - give, 2)
+        cont = sorted([g for g in gs if not g.get("has_target")], key=keyf)
+        if cont and left > 0:
+            each = round(left / len(cont), 2)
+            for g in cont:
+                alloc[g["pot_id"]] = each
+            left = 0
+        return max(left, 0)
+
+    # Each person funds their own goals from their monthly surplus; leftover pools to joint.
+    per_person = {pid: max(round(v.get("net", 0) / 12, 2), 0)
+                  for pid, v in dash.get("per_person_year", {}).items()}
+    pool = 0.0
+    for pid, avail in per_person.items():
+        pool += fund([g for g in goals if g.get("funded_by") == pid], avail)
+    joint = [g for g in goals if g.get("funded_by") not in per_person]
+    fund(joint, pool if per_person else max(avg, 0))
+
     plan = [{"pot_id": g["pot_id"], "name": g["name"], "current": g["monthly_amount"],
              "proposed": alloc[g["pot_id"]], "has_target": g.get("has_target", False),
-             "priority": g.get("priority")} for g in goals]
+             "priority": g.get("priority"), "funded_by": g.get("funded_by", "joint")} for g in goals]
     if apply:
         for pid, val in alloc.items():
             await db.pots.update_one({"pot_id": pid, "household_id": hid}, {"$set": {"monthly_amount": val}})
@@ -426,7 +481,7 @@ async def distribute_goals(hid: str, apply: bool = False, user: dict = Depends(g
 @api_router.post("/households/{hid}/goals/{pot_id}/tip")
 async def goal_tip(hid: str, pot_id: str, user: dict = Depends(get_current_user)):
     hh = await require_household(hid, user)
-    goals, avg = await _goals_ctx(hid, hh)
+    goals, avg, _dash = await _goals_ctx(hid, hh)
     g = next((x for x in goals if x["pot_id"] == pot_id), None)
     if not g:
         raise HTTPException(status_code=404, detail="Doel niet gevonden")

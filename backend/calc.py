@@ -317,6 +317,20 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
     }
 
 
+def derive_invoice_status(i):
+    """Auto status for the bouwdepot table."""
+    if i.get("type") == "offerte":
+        return i.get("status") or "ontvangen"
+    if i.get("paid_on"):
+        return "betaald"
+    if i.get("submitted_to_bank"):
+        return "ingediend"
+    due = _parse(i.get("due_date"))
+    if due:
+        return "telaat" if (due - date.today()).days < 0 else "ingepland"
+    return "open"
+
+
 def _build_timeline(depot, invoices, start, paid_out, submitted_not_paid, still_to_submit):
     start_date = _parse(depot.get("start_date")) or date.today()
     end_date = _parse(depot.get("end_date"))
@@ -445,6 +459,7 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
             "target_date": target_date, "items": items, "total_cost": total_cost,
             "completed": False, "date_passed": False,
             "priority": pot.get("priority"), "completed_at": pot.get("completed_at"),
+            "funded_by": pot.get("funded_by") or "joint",
         }
         if has_target:
             td = _parse(target_date)

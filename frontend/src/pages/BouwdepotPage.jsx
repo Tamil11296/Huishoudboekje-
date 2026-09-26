@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -6,6 +6,7 @@ import {
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Wallet, Banknote, Send, FileClock, PiggyBank, CalendarClock,
+  Paperclip, AlertTriangle,
 } from "lucide-react";
 import api from "@/lib/api";
 import { eur, apiErr } from "@/lib/format";
@@ -73,6 +74,32 @@ export default function BouwdepotPage() {
     invoices.forEach((i) => { if (i.type === "offerte") m[i.invoice_id] = i.supplier; });
     return m;
   }, [invoices]);
+
+  const API = process.env.REACT_APP_BACKEND_URL;
+  const fileRef = useRef();
+  const [upTarget, setUpTarget] = useState(null);
+  const pickFile = (id) => { setUpTarget(id); setTimeout(() => fileRef.current?.click(), 0); };
+  const onUpload = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f || !upTarget) return;
+    const fd = new FormData(); fd.append("file", f);
+    try { await api.post(`/households/${currentId}/invoices/${upTarget}/attachment`, fd); toast.success(t("save")); load(); }
+    catch (err) { toast.error(apiErr(err)); }
+    finally { e.target.value = ""; setUpTarget(null); }
+  };
+  const STATUS_CLS = {
+    betaald: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200",
+    geaccepteerd: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200",
+    ingediend: "bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200",
+    ingepland: "bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200",
+    telaat: "bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200",
+    ontvangen: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    open: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  };
+  const STATUS_LABEL = {
+    betaald: t("st_betaald"), ingediend: t("st_ingediend"), ingepland: t("st_ingepland"),
+    telaat: t("st_telaat"), open: t("st_open"), geaccepteerd: t("geaccepteerd"), ontvangen: t("ontvangen"),
+  };
 
   const configs = {
     depot: {
@@ -158,6 +185,15 @@ export default function BouwdepotPage() {
           </Button>
         </div>
       </div>
+
+      <input type="file" ref={fileRef} className="hidden" accept=".pdf,image/*" onChange={onUpload} data-testid="attachment-input" />
+
+      {summary.overdue_count > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200" data-testid="overdue-banner">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span><span className="font-semibold">{summary.overdue_count}</span> {t("overdue_alert")}</span>
+        </div>
+      )}
 
       {!depot ? (
         <Card className="p-10 text-center text-muted-foreground">{t("none_yet")}</Card>
@@ -296,7 +332,7 @@ export default function BouwdepotPage() {
                       <TableCell>{postName[r.bouwpost_id] || <span className="text-rose-600">?</span>}</TableCell>
                       <TableCell><Badge variant="secondary">{t(r.type === "factuur" ? "factuur" : "offerte")}</Badge></TableCell>
                       <TableCell>
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${r.status === "geaccepteerd" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{r.status ? t(r.status) : "—"}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${STATUS_CLS[r.derived_status] || STATUS_CLS.open}`} data-testid={`invoice-status-${r.invoice_id}`}>{STATUS_LABEL[r.derived_status] || t(r.derived_status || "open")}</span>
                       </TableCell>
                       <TableCell className="text-right font-num">{r.amount_incl_vat ? eur(r.amount_incl_vat) : "—"}</TableCell>
                       <TableCell className="text-right font-num">{r.invoice_amount ? eur(r.invoice_amount) : "—"}</TableCell>
@@ -306,6 +342,9 @@ export default function BouwdepotPage() {
                       <TableCell className="font-num text-xs">{r.paid_on || "—"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
+                          {r.attachment
+                            ? <a href={`${API}/api/households/${currentId}/invoices/${r.invoice_id}/attachment`} target="_blank" rel="noreferrer" title={t("view_attachment")} data-testid={`view-attachment-${r.invoice_id}`}><Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600"><Paperclip className="h-4 w-4" /></Button></a>
+                            : <Button size="icon" variant="ghost" className="h-8 w-8" title={t("attachment")} onClick={() => pickFile(r.invoice_id)} data-testid={`upload-attachment-${r.invoice_id}`}><Paperclip className="h-4 w-4" /></Button>}
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openDialog("invoice", r)}><Pencil className="h-4 w-4" /></Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => del("invoice", r)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
