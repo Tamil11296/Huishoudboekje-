@@ -35,6 +35,9 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
   - AI-tip per doel: POST /households/{hid}/goals/{pot_id}/tip (Claude) → felicitatie/vervolgtip; knop + weergave op de kaart.
   - Slim verdelen: POST /households/{hid}/goals/distribute verdeelt het maandelijkse overschot — project-doelen (op streefdatum gesorteerd) krijgen hun required-monthly, doorlopende potjes de rest gelijk verdeeld; "Verdeel overschot"-knop op /doelen.
   - Export: PDF + Excel tonen nu "Doelen & Sparen" (type, streefdatum, saldo, per maand, nog nodig, haalbaar) i.p.v. losse Projecten. Backend curl + FE screenshot geverifieerd.
+- 2026-06 v7 (doelen + snelinvoer):
+  - Doel-prioriteit (handmatig), "Behaald"-historie met datum, en verdeel-voorbeeld vóór bevestigen (POST /goals/distribute?apply=false → plan, apply=true → opslaan).
+  - Dashboard snel-uitgave-balk: categorie, bedrag, omschrijving, maand, **persoon kiezen** (paid_by), **AI-categorie** (onBlur/knop → /ai/categorize), en **snelknoppen** (veelgebruikte categorie+bedrag, één-tik). Geverifieerd via curl + screenshot.
 
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.

@@ -226,6 +226,8 @@ export const translations = {
     confirm: "Bevestigen",
     quick_add_expense: "Snel uitgave toevoegen",
     added: "Toegevoegd",
+    ai_suggested: "AI stelde voor",
+    quick_presets: "Snelknoppen",
   },
   en: {
     app_name: "Household Budget & Building Deposit",
@@ -445,5 +447,7 @@ export const translations = {
     confirm: "Confirm",
     quick_add_expense: "Quick add expense",
     added: "Added",
+    ai_suggested: "AI suggested",
+    quick_presets: "Quick buttons",
   },
 };

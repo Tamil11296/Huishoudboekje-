@@ -148,6 +148,7 @@ export default function Dashboard() {
       <QuickExpense
         currentId={currentId}
         cats={currentHousehold?.categories?.expense || []}
+        persons={currentHousehold?.persons || []}
         defaultMonth={data.current_month ? `${data.year}-${String(data.current_month).padStart(2, "0")}` : `${data.year}-01`}
         onAdded={loadData}
       />
@@ -437,50 +438,96 @@ function Row({ label, value }) {
 }
 
 
-function QuickExpense({ currentId, cats, defaultMonth, onAdded }) {
+const PRESET_AMTS = { Boodschappen: 50, "Uit eten": 30, "Etentjes & uitjes": 30, Vervoer: 60, Kleding: 40, "Vrije tijd": 25 };
+
+function QuickExpense({ currentId, cats, persons, defaultMonth, onAdded }) {
   const { t } = useApp();
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
   const [month, setMonth] = useState(defaultMonth);
+  const [paidBy, setPaidBy] = useState("joint");
   const [busy, setBusy] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const known = cats.filter((c) => PRESET_AMTS[c]);
+  const rest = cats.filter((c) => !PRESET_AMTS[c]);
+  const presets = [...known, ...rest].slice(0, 5).map((c) => ({ category: c, amount: PRESET_AMTS[c] || 25 }));
+
+  const post = (c, amt, d) => api.post(`/households/${currentId}/variable-expenses`, {
+    category: c, amount: Number(amt), description: d || c, month, paid_by: paidBy,
+  });
   const add = async () => {
     if (!category || !amount) { toast.error(t("category") + " + " + t("amount")); return; }
     setBusy(true);
+    try { await post(category, amount, desc); toast.success(t("added")); setAmount(""); setDesc(""); onAdded(); }
+    catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
+  };
+  const quick = async (p) => {
+    setBusy(true);
+    try { await post(p.category, p.amount, p.category); toast.success(`${p.category} ${eur(p.amount)}`); onAdded(); }
+    catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
+  };
+  const suggest = async () => {
+    if (!desc || category) return;
+    setSuggesting(true);
     try {
-      await api.post(`/households/${currentId}/variable-expenses`, {
-        category, amount: Number(amount), description: desc || category, month, paid_by: "joint",
-      });
-      toast.success(t("added"));
-      setAmount(""); setDesc("");
-      onAdded();
-    } catch (e) { toast.error(apiErr(e)); }
-    finally { setBusy(false); }
+      const { data } = await api.post(`/households/${currentId}/ai/categorize`,
+        { description: desc, amount: amount ? Number(amount) : undefined });
+      if (data.category && cats.includes(data.category)) {
+        setCategory(data.category); toast.success(`${t("ai_suggested")}: ${data.category}`);
+      }
+    } catch (e) { /* silent */ } finally { setSuggesting(false); }
   };
   const onKey = (e) => { if (e.key === "Enter") add(); };
+
   return (
-    <Card className="p-4" data-testid="quick-expense">
+    <Card className="p-4 space-y-3" data-testid="quick-expense">
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-2 font-heading font-semibold text-sm shrink-0">
           <Zap className="h-4 w-4 text-amber-500" /> {t("quick_add_expense")}
         </div>
-        <div className="w-44">
+        <div className="w-40">
           <Select value={category} onValueChange={setCategory}>
             <SelectTrigger data-testid="quick-expense-category"><SelectValue placeholder={t("category")} /></SelectTrigger>
-            <SelectContent>
-              {cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
+            <SelectContent>{cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
           </Select>
         </div>
         <Input type="number" step="0.01" placeholder={t("amount")} value={amount} onKeyDown={onKey}
-               onChange={(e) => setAmount(e.target.value)} className="w-28 font-num" data-testid="quick-expense-amount" />
-        <Input placeholder={t("description")} value={desc} onKeyDown={onKey}
-               onChange={(e) => setDesc(e.target.value)} className="flex-1 min-w-[120px]" data-testid="quick-expense-desc" />
-        <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-40" data-testid="quick-expense-month" />
+               onChange={(e) => setAmount(e.target.value)} className="w-24 font-num" data-testid="quick-expense-amount" />
+        <div className="relative flex-1 min-w-[140px]">
+          <Input placeholder={t("description")} value={desc} onKeyDown={onKey} onBlur={suggest}
+                 onChange={(e) => setDesc(e.target.value)} className="pr-9" data-testid="quick-expense-desc" />
+          <button type="button" onClick={suggest} disabled={suggesting || !desc} title={t("ai_suggested")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 disabled:opacity-40" data-testid="quick-expense-ai">
+            <Sparkles className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="w-32">
+          <Select value={paidBy} onValueChange={setPaidBy}>
+            <SelectTrigger data-testid="quick-expense-person"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="joint">{t("joint")}</SelectItem>
+              {persons.map((p) => <SelectItem key={p.person_id} value={p.person_id}>{p.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-36" data-testid="quick-expense-month" />
         <Button onClick={add} disabled={busy} className="gap-1 rounded-full" data-testid="quick-expense-add">
           <Plus className="h-4 w-4" /> {t("add")}
         </Button>
       </div>
+      {presets.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">{t("quick_presets")}:</span>
+          {presets.map((p) => (
+            <button key={p.category} type="button" onClick={() => quick(p)} disabled={busy}
+              className="px-3 py-1 rounded-full text-xs border border-border hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors font-num"
+              data-testid={`quick-preset-${p.category}`}>
+              {p.category} {eur(p.amount)}
+            </button>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
