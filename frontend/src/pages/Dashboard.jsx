@@ -86,6 +86,10 @@ export default function Dashboard() {
   const potsMonthly = pots?.total_monthly || 0;
   const potsAnnual = Math.round(potsMonthly * 12 * 100) / 100;
   const annualFree = Math.round((a.over - potsAnnual) * 100) / 100;
+  const cumAfterPots = (() => {
+    let c = 0;
+    return data.months.map((m) => { c += (m.over - potsMonthly); return Math.round(c * 100) / 100; });
+  })();
   const chartData = data.months.map((m) => ({
     name: m.label.slice(0, 3),
     [t("income")]: m.income,
@@ -381,7 +385,7 @@ export default function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.months.map((m) => (
+              {data.months.map((m, idx) => (
                 <TableRow key={m.month} data-testid={`month-row-${m.month}`}>
                   <TableCell className="font-medium">{m.label}</TableCell>
                   <TableCell>
@@ -408,7 +412,7 @@ export default function Dashboard() {
                       {eur(m.per_person[p.person_id]?.net)}
                     </TableCell>
                   ))}
-                  <TableCell className="text-right font-num text-muted-foreground">{eur(m.cumulative)}</TableCell>
+                  <TableCell className="text-right font-num text-muted-foreground">{eur(potsMonthly > 0 ? cumAfterPots[idx] : m.cumulative)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

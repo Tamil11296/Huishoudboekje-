@@ -257,11 +257,25 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
 
     posts = [compute_bouwpost_rollup(bp, depot_invoices) for bp in bouwposten
              if bp.get("bouwdepot_id") == depot["bouwdepot_id"]]
-    # still to submit = accepted work not yet invoiced/submitted
+    # still to submit = accepted work not yet invoiced/submitted.
+    # Subtract child term-invoices already submitted/paid so their amount is not
+    # double-counted (once here via the quote, once via submitted_not_paid/paid_out).
+    child_committed = {}
+    for i in depot_invoices:
+        if i.get("type") == "factuur" and i.get("parent_quote_id"):
+            if i.get("paid_on"):
+                amt = float(i.get("paid_amount") or i.get("invoice_amount") or 0)
+            elif i.get("submitted_to_bank"):
+                amt = float(i.get("invoice_amount") or 0)
+            else:
+                amt = 0.0
+            child_committed[i["parent_quote_id"]] = child_committed.get(i["parent_quote_id"], 0) + amt
+
     still_to_submit = 0.0
     for i in depot_invoices:
         if i.get("type") == "offerte" and i.get("status") == "geaccepteerd" and not i.get("invoice_amount"):
-            still_to_submit += float(i.get("amount_incl_vat") or 0)
+            remaining = float(i.get("amount_incl_vat") or 0) - child_committed.get(i["invoice_id"], 0)
+            still_to_submit += max(remaining, 0)
 
     balance_after_pending = start - paid_out - submitted_not_paid
     freely_available = balance_after_pending - still_to_submit
