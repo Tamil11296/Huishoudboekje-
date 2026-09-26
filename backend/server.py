@@ -267,7 +267,7 @@ register_crud("invoices", "invoices", "invoice_id", "inv",
                "submitted_on", "paid_on", "description",
                "parent_quote_id", "termijn", "due_date", "paid_amount"])
 register_crud("pots", "pots", "pot_id", "pot",
-              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved"])
+              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved", "priority"])
 register_crud("projects", "projects", "project_id", "proj",
               ["name", "target_date", "already_saved", "note"])
 register_crud("project-items", "project_items", "item_id", "pit",
@@ -386,18 +386,21 @@ async def _goals_ctx(hid, hh):
 
 
 @api_router.post("/households/{hid}/goals/distribute")
-async def distribute_goals(hid: str, user: dict = Depends(get_current_user)):
+async def distribute_goals(hid: str, apply: bool = False, user: dict = Depends(get_current_user)):
     hh = await require_household(hid, user)
     goals, avg = await _goals_ctx(hid, hh)
     from datetime import date as _date
     budget = max(avg, 0)
 
     def keyf(g):
+        pr = g.get("priority")
+        pr = pr if isinstance(pr, (int, float)) else 999
         td = g.get("target_date")
         try:
-            return _date.fromisoformat(str(td)[:10]) if td else _date.max
+            d = _date.fromisoformat(str(td)[:10]) if td else _date.max
         except Exception:
-            return _date.max
+            d = _date.max
+        return (pr, d)
 
     alloc = {g["pot_id"]: 0.0 for g in goals}
     left = budget
@@ -405,15 +408,19 @@ async def distribute_goals(hid: str, user: dict = Depends(get_current_user)):
         give = round(min(g["required_monthly"], max(left, 0)), 2)
         alloc[g["pot_id"]] = give
         left = round(left - give, 2)
-    cont = [g for g in goals if not g.get("has_target")]
+    cont = sorted([g for g in goals if not g.get("has_target")], key=keyf)
     if cont and left > 0:
         each = round(left / len(cont), 2)
         for g in cont:
             alloc[g["pot_id"]] = each
-    for pid, val in alloc.items():
-        await db.pots.update_one({"pot_id": pid, "household_id": hid}, {"$set": {"monthly_amount": val}})
-    await log_change(hid, user, "doelen", "Overschot automatisch verdeeld over doelen")
-    return {"allocations": alloc, "avg_monthly_over": avg}
+    plan = [{"pot_id": g["pot_id"], "name": g["name"], "current": g["monthly_amount"],
+             "proposed": alloc[g["pot_id"]], "has_target": g.get("has_target", False),
+             "priority": g.get("priority")} for g in goals]
+    if apply:
+        for pid, val in alloc.items():
+            await db.pots.update_one({"pot_id": pid, "household_id": hid}, {"$set": {"monthly_amount": val}})
+        await log_change(hid, user, "doelen", "Overschot automatisch verdeeld over doelen")
+    return {"plan": plan, "avg_monthly_over": avg, "applied": apply}
 
 
 @api_router.post("/households/{hid}/goals/{pot_id}/tip")
@@ -448,6 +455,18 @@ async def goals_summary(hid: str, user: dict = Depends(get_current_user)):
     dash = compute_dashboard(hh, incomes, fixed, variable, year)
     avg = dash["annual"].get("avg_monthly_over", 0)
     res = compute_goals_summary(pots, pitems, variable, year, cur_month, cur_month, avg)
+    today = datetime.now(timezone.utc).date().isoformat()
+    for g in res["goals"]:
+        pot = next((p for p in pots if p["pot_id"] == g["pot_id"]), {})
+        existing = pot.get("completed_at")
+        if g["completed"] and not existing:
+            await db.pots.update_one({"pot_id": g["pot_id"], "household_id": hid}, {"$set": {"completed_at": today}})
+            g["completed_at"] = today
+        elif not g["completed"] and existing:
+            await db.pots.update_one({"pot_id": g["pot_id"], "household_id": hid}, {"$unset": {"completed_at": ""}})
+            g["completed_at"] = None
+        else:
+            g["completed_at"] = existing
     res["avg_monthly_over"] = avg
     res["free_surplus"] = round(avg - res["total_monthly"], 2)
     return res

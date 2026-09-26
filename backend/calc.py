@@ -444,6 +444,7 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
             "note": pot.get("note", ""), "has_target": has_target,
             "target_date": target_date, "items": items, "total_cost": total_cost,
             "completed": False, "date_passed": False,
+            "priority": pot.get("priority"), "completed_at": pot.get("completed_at"),
         }
         if has_target:
             td = _parse(target_date)

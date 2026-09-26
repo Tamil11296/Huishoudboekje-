@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Coins, Target, CalendarClock, CheckCircle2, AlertTriangle,
-  Wand2, Sparkles, PartyPopper,
+  Wand2, Sparkles, PartyPopper, Flag, Trophy,
 } from "lucide-react";
 import api from "@/lib/api";
 import { eur, apiErr } from "@/lib/format";
@@ -27,6 +27,7 @@ export default function Goals() {
   const [itemDialog, setItemDialog] = useState(null);
   const [tips, setTips] = useState({});
   const [tipBusy, setTipBusy] = useState(null);
+  const [preview, setPreview] = useState(null);
   const cats = currentHousehold?.categories?.expense || [];
 
   const load = useCallback(async () => {
@@ -57,7 +58,11 @@ export default function Goals() {
   const delItem = async (id) => { await api.delete(`/households/${currentId}/project-items/${id}`); load(); };
 
   const distribute = async () => {
-    try { await api.post(`/households/${currentId}/goals/distribute`); toast.success(t("auto_distribute")); load(); }
+    try { const { data } = await api.post(`/households/${currentId}/goals/distribute?apply=false`); setPreview(data); }
+    catch (e) { toast.error(apiErr(e)); }
+  };
+  const applyDistribute = async () => {
+    try { await api.post(`/households/${currentId}/goals/distribute?apply=true`); toast.success(t("auto_distribute")); setPreview(null); load(); }
     catch (e) { toast.error(apiErr(e)); }
   };
   const getTip = async (id) => {
@@ -68,6 +73,9 @@ export default function Goals() {
   };
 
   if (!summary) return <div className="text-muted-foreground">{t("loading")}</div>;
+
+  const active = summary.goals.filter((g) => !g.completed);
+  const completed = summary.goals.filter((g) => g.completed);
 
   return (
     <div className="space-y-8">
@@ -91,7 +99,7 @@ export default function Goals() {
       {!summary.goals.length && <Card className="p-10 text-center text-muted-foreground">{t("none_yet")}</Card>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {summary.goals.map((g) => {
+        {active.map((g) => {
           const isEnvelope = (g.categories || []).length > 0 && g.monthly_amount > 0;
           const over = isEnvelope && g.spent_month > g.monthly_amount + 0.005;
           const monthPct = g.monthly_amount > 0 ? Math.round((g.spent_month / g.monthly_amount) * 100) : 0;
@@ -118,6 +126,11 @@ export default function Goals() {
                   <Badge variant="secondary" className="gap-1">
                     {g.has_target ? <><CalendarClock className="h-3 w-3" /> {t("goal_project")}</> : <>{t("goal_continuous")}</>}
                   </Badge>
+                  {g.priority != null && (
+                    <Badge variant="outline" className="gap-1 text-xs" data-testid={`goal-priority-${g.pot_id}`}>
+                      <Flag className="h-3 w-3" /> {t("priority")} {g.priority}
+                    </Badge>
+                  )}
                   {g.completed && (
                     <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200 gap-1" data-testid={`goal-completed-${g.pot_id}`}>
                       <PartyPopper className="h-3 w-3" /> {t("goal_completed")}
@@ -239,6 +252,56 @@ export default function Goals() {
           ]}
           onSubmit={saveItem} testid="dialog-item" />
       )}
+
+      {completed.length > 0 && (
+        <div data-testid="achieved-section">
+          <h2 className="font-heading text-xl font-bold mb-4 flex items-center gap-2">
+            <Trophy className="h-5 w-5 text-amber-500" /> {t("achieved")}
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {completed.map((g) => (
+              <Card key={g.pot_id} className="p-4 border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/20" data-testid={`achieved-card-${g.pot_id}`}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <PartyPopper className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <span className="font-heading font-bold truncate">{g.name}</span>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => del(g.pot_id)}><Trash2 className="h-4 w-4" /></Button>
+                </div>
+                <div className="text-sm text-muted-foreground mt-1">{t("achieved_on")}: {g.completed_at || "—"}</div>
+                <div className="font-num font-bold text-emerald-600 mt-1">{eur(g.balance)} / {eur(g.total_cost)}</div>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {preview && (
+        <Dialog open onOpenChange={(o) => !o && setPreview(null)}>
+          <DialogContent className="bg-popover max-h-[90vh] overflow-y-auto" data-testid="distribute-preview">
+            <DialogHeader><DialogTitle className="font-heading">{t("distribute_preview")}</DialogTitle></DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              {t("avg_monthly_saving")}: <span className="font-num font-semibold">{eur(preview.avg_monthly_over)}</span>/{t("month").toLowerCase()}
+            </p>
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                <span>{t("nav_goals")}</span><span className="text-right">{t("col_current")}</span><span className="text-right">{t("col_proposed")}</span>
+              </div>
+              {preview.plan.map((r) => (
+                <div key={r.pot_id} className="grid grid-cols-3 items-center text-sm py-1.5 border-t border-border" data-testid={`preview-row-${r.pot_id}`}>
+                  <span className="truncate">{r.name}</span>
+                  <span className="text-right font-num text-muted-foreground">{eur(r.current)}</span>
+                  <span className={`text-right font-num font-semibold ${r.proposed >= r.current ? "text-emerald-600" : "text-rose-600"}`}>{eur(r.proposed)}</span>
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="gap-2">
+              <Button variant="outline" onClick={() => setPreview(null)}>{t("cancel")}</Button>
+              <Button onClick={applyDistribute} data-testid="confirm-distribute-btn">{t("confirm")}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -249,6 +312,7 @@ function GoalDialog({ open, onClose, initial, cats, onSubmit }) {
   const [amount, setAmount] = useState(initial?.monthly_amount ?? "");
   const [targetDate, setTargetDate] = useState(initial?.target_date || "");
   const [alreadySaved, setAlreadySaved] = useState(initial?.already_saved ?? "");
+  const [priority, setPriority] = useState(initial?.priority ?? "");
   const [sel, setSel] = useState(initial?.categories || []);
   const [busy, setBusy] = useState(false);
   const toggle = (c) => setSel((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]));
@@ -259,6 +323,7 @@ function GoalDialog({ open, onClose, initial, cats, onSubmit }) {
       await onSubmit({
         name, monthly_amount: amount, categories: sel,
         target_date: targetDate || null, already_saved: alreadySaved === "" ? 0 : alreadySaved,
+        priority: priority === "" ? null : Number(priority),
       });
     } finally { setBusy(false); }
   };
@@ -273,6 +338,7 @@ function GoalDialog({ open, onClose, initial, cats, onSubmit }) {
             <div className="space-y-1.5"><Label>{t("target_date")}</Label><Input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} data-testid="field-goal-target" /></div>
             <div className="space-y-1.5"><Label>{t("already_saved")}</Label><Input type="number" step="0.01" value={alreadySaved} onChange={(e) => setAlreadySaved(e.target.value)} data-testid="field-goal-saved" /></div>
           </div>
+          <div className="space-y-1.5"><Label>{t("priority")}</Label><Input type="number" min="1" step="1" value={priority} onChange={(e) => setPriority(e.target.value)} placeholder="1 = eerst" data-testid="field-goal-priority" /></div>
           <div className="space-y-1.5">
             <Label>{t("linked_categories")}</Label>
             <div className="flex flex-wrap gap-2">
