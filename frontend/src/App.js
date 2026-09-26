@@ -10,8 +10,7 @@ import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import IncomeExpenses from "@/pages/IncomeExpenses";
 import BouwdepotPage from "@/pages/BouwdepotPage";
-import Pots from "@/pages/Pots";
-import Projects from "@/pages/Projects";
+import Goals from "@/pages/Goals";
 import Settings from "@/pages/Settings";
 import Header from "@/components/Header";
 import AiAssistant from "@/components/AiAssistant";
@@ -98,21 +97,11 @@ function AppRouter() {
         }
       />
       <Route
-        path="/potjes"
+        path="/doelen"
         element={
           <Protected>
             <Shell>
-              <Pots />
-            </Shell>
-          </Protected>
-        }
-      />
-      <Route
-        path="/projecten"
-        element={
-          <Protected>
-            <Shell>
-              <Projects />
+              <Goals />
             </Shell>
           </Protected>
         }

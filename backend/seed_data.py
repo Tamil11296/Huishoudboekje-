@@ -145,21 +145,40 @@ async def ensure_demo_pots(db, hid):
     ])
 
 
-async def ensure_demo_projects(db, hid):
-    """Idempotently add a demo savings project (e.g. baby) to the demo household."""
-    if await db.projects.find_one({"household_id": hid}):
+async def ensure_demo_goal(db, hid):
+    """Idempotently add a demo savings goal (e.g. baby) as a pot with cost items."""
+    if await db.pots.find_one({"household_id": hid, "target_date": {"$ne": None}}):
         return
-    proj_id = new_id("proj")
-    await db.projects.insert_one({
-        "project_id": proj_id, "household_id": hid, "name": "Kindje op komst",
-        "target_date": "2027-03-01", "already_saved": 2500, "note": ""})
+    if await db.projects.find_one({"household_id": hid}):
+        return  # legacy project will be migrated into a goal
+    pot_id = new_id("pot")
+    await db.pots.insert_one({
+        "pot_id": pot_id, "household_id": hid, "name": "Kindje op komst",
+        "monthly_amount": 300, "categories": [], "note": "",
+        "target_date": "2027-03-01", "already_saved": 2500})
     await db.project_items.insert_many([
-        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": pot_id,
          "name": "Babykamer & meubels", "amount": 2200, "note": ""},
-        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": pot_id,
          "name": "Kinderwagen & autostoel", "amount": 1400, "note": ""},
-        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": pot_id,
          "name": "Verlof / inkomstenbuffer", "amount": 6000, "note": ""},
-        {"item_id": new_id("pit"), "household_id": hid, "project_id": proj_id,
+        {"item_id": new_id("pit"), "household_id": hid, "project_id": pot_id,
          "name": "Kleding & startspullen", "amount": 900, "note": ""},
     ])
+
+
+async def migrate_projects_to_goals(db):
+    """One-way migration: convert legacy 'projects' docs into 'pots' (goals),
+    re-pointing their project_items. Idempotent (projects collection empties out)."""
+    cursor = db.projects.find({})
+    async for pr in cursor:
+        pot_id = new_id("pot")
+        await db.pots.insert_one({
+            "pot_id": pot_id, "household_id": pr["household_id"],
+            "name": pr.get("name", "Doel"), "monthly_amount": 0, "categories": [],
+            "note": pr.get("note", ""), "target_date": pr.get("target_date"),
+            "already_saved": float(pr.get("already_saved") or 0)})
+        await db.project_items.update_many(
+            {"project_id": pr["project_id"]}, {"$set": {"project_id": pot_id}})
+        await db.projects.delete_one({"project_id": pr["project_id"]})

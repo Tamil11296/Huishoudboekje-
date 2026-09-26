@@ -9,9 +9,9 @@ from starlette.middleware.cors import CORSMiddleware
 from deps import db, get_current_user, new_id, hash_password, verify_password, log_change, public_user
 from auth import router as auth_router
 from calc import (compute_dashboard, compute_bouwdepot_summary, compute_bouwpost_rollup,
-                  compute_projects_summary, compute_pots_summary)
+                  compute_projects_summary, compute_pots_summary, compute_goals_summary)
 from emailer import send_email, invite_email_html
-from seed_data import seed_demo, ensure_demo_projects, ensure_demo_pots
+from seed_data import seed_demo, ensure_demo_pots, ensure_demo_goal, migrate_projects_to_goals
 from export import build_excel, build_pdf
 from llm import ask_claude
 
@@ -267,7 +267,7 @@ register_crud("invoices", "invoices", "invoice_id", "inv",
                "submitted_on", "paid_on", "description",
                "parent_quote_id", "termijn", "due_date", "paid_amount"])
 register_crud("pots", "pots", "pot_id", "pot",
-              ["name", "monthly_amount", "categories", "note"])
+              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved"])
 register_crud("projects", "projects", "project_id", "proj",
               ["name", "target_date", "already_saved", "note"])
 register_crud("project-items", "project_items", "item_id", "pit",
@@ -361,6 +361,25 @@ async def pots_summary(hid: str, user: dict = Depends(get_current_user)):
     fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
     dash = compute_dashboard(hh, incomes, fixed, variable, year)
     avg = dash["annual"].get("avg_monthly_over", 0)
+    res["avg_monthly_over"] = avg
+    res["free_surplus"] = round(avg - res["total_monthly"], 2)
+    return res
+
+
+@api_router.get("/households/{hid}/goals-summary")
+async def goals_summary(hid: str, user: dict = Depends(get_current_user)):
+    hh = await require_household(hid, user)
+    now = datetime.now(timezone.utc)
+    year = hh.get("dashboard_year") or now.year
+    cur_month = now.month if year == now.year else (12 if year < now.year else 0)
+    variable = await db.variable_expenses.find({"household_id": hid}, {"_id": 0}).to_list(2000)
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    pitems = await db.project_items.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    incomes = await db.incomes.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    fixed = await db.fixed_expenses.find({"household_id": hid}, {"_id": 0}).to_list(1000)
+    dash = compute_dashboard(hh, incomes, fixed, variable, year)
+    avg = dash["annual"].get("avg_monthly_over", 0)
+    res = compute_goals_summary(pots, pitems, variable, year, cur_month, cur_month, avg)
     res["avg_monthly_over"] = avg
     res["free_surplus"] = round(avg - res["total_monthly"], 2)
     return res
@@ -507,8 +526,9 @@ async def startup():
         await seed_demo(db, owner)
         demo = await db.households.find_one({"owner_id": owner["user_id"], "demo": True}, {"_id": 0})
         if demo:
-            await ensure_demo_projects(db, demo["household_id"])
             await ensure_demo_pots(db, demo["household_id"])
+            await ensure_demo_goal(db, demo["household_id"])
+    await migrate_projects_to_goals(db)
 
 
 @app.on_event("shutdown")

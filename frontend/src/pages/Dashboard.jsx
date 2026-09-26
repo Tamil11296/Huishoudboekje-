@@ -61,15 +61,15 @@ export default function Dashboard() {
   const [insights, setInsights] = useState(null);
   const [insLoading, setInsLoading] = useState(false);
   const [selectedCat, setSelectedCat] = useState(null);
-  const [pots, setPots] = useState(null);
+  const [pots, setGoals] = useState(null);
 
   useEffect(() => {
     if (!currentId) return;
     api.get(`/households/${currentId}/dashboard`, { params: { year } })
       .then((r) => setData(r.data))
       .catch(() => {});
-    api.get(`/households/${currentId}/pots-summary`)
-      .then((r) => setPots(r.data))
+    api.get(`/households/${currentId}/goals-summary`)
+      .then((r) => setGoals(r.data))
       .catch(() => {});
   }, [currentId, year]);
 
@@ -103,7 +103,7 @@ export default function Dashboard() {
     [t("after_pots")]: Math.round((m.over - potsMonthly) * 100) / 100,
   }));
   const categoryData = Object.entries(data.expense_by_category || {}).map(([name, value]) => ({ name, value }));
-  const potBudgets = (pots?.pots || []).filter((p) => p.monthly_amount > 0);
+  const potBudgets = (pots?.goals || []).filter((p) => (p.categories || []).length > 0 && p.monthly_amount > 0);
   const overCount = potBudgets.filter((p) => p.spent_month > p.monthly_amount + 0.005).length;
 
   return (
@@ -140,7 +140,7 @@ export default function Dashboard() {
           className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200"
           data-testid="budget-alert-banner">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span><span className="font-semibold">{overCount}</span> {t("pots_over_budget")}</span>
+          <span><span className="font-semibold">{overCount}</span> {t("goals_over_budget")}</span>
         </motion.div>
       )}
 
@@ -261,11 +261,11 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {pots?.pots?.length > 0 && (
+      {pots?.goals?.length > 0 && (
         <Card className="p-6" data-testid="dashboard-pots-block">
           <div className="flex items-center justify-between mb-1">
             <h2 className="font-heading text-lg font-semibold flex items-center gap-2">
-              <Coins className="h-5 w-5 text-slate-400" /> {t("nav_pots")}
+              <Coins className="h-5 w-5 text-slate-400" /> {t("nav_goals")}
             </h2>
             <span className="text-sm text-muted-foreground">
               {t("reserved_pots")}: <span className="font-num font-semibold">{eur(potsMonthly)}/{t("month").toLowerCase()}</span>
@@ -275,28 +275,34 @@ export default function Dashboard() {
             {t("after_pots")}: <span className={`font-num font-semibold ${annualFree >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(annualFree)}</span> / {t("annual").toLowerCase()}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {pots.pots.map((p) => {
+            {pots.goals.map((p) => {
               const budget = p.monthly_amount || 0;
               const spent = p.spent_month || 0;
+              const isEnvelope = (p.categories || []).length > 0 && budget > 0;
               const monthPct = budget > 0 ? Math.round((spent / budget) * 100) : 0;
-              const over = budget > 0 && spent > budget + 0.005;
+              const over = isEnvelope && spent > budget + 0.005;
+              const barPct = isEnvelope ? Math.min(monthPct, 100) : (p.has_target ? Math.min(p.progress || 0, 100) : 0);
               return (
                 <div key={p.pot_id} className="rounded-lg border border-border p-3" data-testid={`dashboard-pot-${p.pot_id}`}>
                   <div className="flex items-start justify-between gap-2 mb-1.5">
                     <div className="min-w-0">
                       <div className="font-medium text-sm truncate">{p.name}</div>
                       <div className="text-xs text-muted-foreground font-num">
-                        {t("this_month")}: <span className={over ? "text-rose-600 font-semibold" : ""}>{eur(spent)}</span> {t("of_budget")} {eur(budget)}
+                        {isEnvelope
+                          ? <>{t("this_month")}: <span className={over ? "text-rose-600 font-semibold" : ""}>{eur(spent)}</span> {t("of_budget")} {eur(budget)}</>
+                          : <>{eur(budget)}/{t("month").toLowerCase()}</>}
                       </div>
                     </div>
                     {over
                       ? <Badge className="bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-200 gap-1 shrink-0"><AlertTriangle className="h-3 w-3" />{t("over_budget")}</Badge>
-                      : <Badge variant="secondary" className="text-xs shrink-0">{monthPct}%</Badge>}
+                      : <Badge variant="secondary" className="text-xs shrink-0">{isEnvelope ? `${monthPct}%` : (p.has_target ? `${Math.round(p.progress || 0)}%` : t("goal_continuous"))}</Badge>}
                   </div>
-                  <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                    <div className={`h-full rounded-full transition-all ${over ? "bg-rose-500" : monthPct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
-                         style={{ width: `${Math.min(monthPct, 100)}%` }} />
-                  </div>
+                  {(isEnvelope || p.has_target) && (
+                    <div className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                      <div className={`h-full rounded-full transition-all ${over ? "bg-rose-500" : isEnvelope && monthPct >= 80 ? "bg-amber-500" : "bg-emerald-500"}`}
+                           style={{ width: `${barPct}%` }} />
+                    </div>
+                  )}
                   <div className="flex items-center justify-between mt-1.5 text-xs">
                     <span className="text-muted-foreground">{t("pot_balance")}</span>
                     <span className={`font-num font-semibold ${p.balance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(p.balance)}</span>

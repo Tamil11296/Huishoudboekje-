@@ -15,8 +15,7 @@ const navItems = [
   { to: "/", key: "nav_dashboard", icon: LayoutDashboard, end: true },
   { to: "/inkomsten", key: "nav_income", icon: Wallet },
   { to: "/bouwdepot", key: "nav_bouwdepot", icon: HardHat },
-  { to: "/potjes", key: "nav_pots", icon: Coins },
-  { to: "/projecten", key: "nav_projects", icon: PiggyBank },
+  { to: "/doelen", key: "nav_goals", icon: PiggyBank },
   { to: "/instellingen", key: "nav_settings", icon: Cog },
 ];
 

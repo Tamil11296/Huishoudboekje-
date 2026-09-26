@@ -399,3 +399,60 @@ def compute_pots_summary(pots, variable_expenses, year, months_elapsed, current_
             "spent_month": round(spent_month, 2), "history": history,
         })
     return {"pots": out, "total_monthly": round(total_monthly, 2)}
+
+
+def compute_goals_summary(pots, project_items, variable_expenses, year,
+                          months_elapsed, current_month, avg_monthly_over):
+    """Unified goals: each pot is a goal with optional cost items + target date.
+    balance = already_saved + monthly*months_elapsed - spending in linked categories."""
+    today = date.today()
+    out = []
+    total_monthly = 0.0
+    for pot in pots:
+        cats = pot.get("categories") or []
+        monthly = float(pot.get("monthly_amount") or 0)
+        already = float(pot.get("already_saved") or 0)
+        total_monthly += monthly
+        spent_ytd = 0.0
+        spent_month = 0.0
+        spent_by_month = {}
+        for ve in variable_expenses:
+            if ve.get("category") in cats and str(ve.get("month", ""))[:4] == str(year):
+                mm = int(str(ve["month"])[5:7])
+                amt = float(ve.get("amount") or 0)
+                spent_by_month[mm] = spent_by_month.get(mm, 0) + amt
+                if mm <= months_elapsed:
+                    spent_ytd += amt
+                if mm == current_month:
+                    spent_month += amt
+        allocated = round(monthly * months_elapsed, 2)
+        balance = round(already + allocated - spent_ytd, 2)
+        history = []
+        cum = 0.0
+        for m in range(1, max(months_elapsed, 1) + 1):
+            cum += spent_by_month.get(m, 0)
+            history.append({"m": m, "balance": round(already + monthly * m - cum, 2)})
+        items = [i for i in project_items if i.get("project_id") == pot["pot_id"]]
+        total_cost = round(sum(float(i.get("amount") or 0) for i in items), 2)
+        target_date = pot.get("target_date")
+        has_target = bool(items) or bool(target_date)
+        goal = {
+            "pot_id": pot["pot_id"], "name": pot.get("name"), "categories": cats,
+            "monthly_amount": round(monthly, 2), "already_saved": round(already, 2),
+            "allocated": allocated, "spent": round(spent_ytd, 2),
+            "spent_month": round(spent_month, 2), "balance": balance, "history": history,
+            "note": pot.get("note", ""), "has_target": has_target,
+            "target_date": target_date, "items": items, "total_cost": total_cost,
+        }
+        if has_target:
+            td = _parse(target_date)
+            months_left = max((td.year - today.year) * 12 + (td.month - today.month), 1) if td else 12
+            remaining = max(total_cost - balance, 0)
+            required = round(remaining / months_left, 2)
+            goal.update({
+                "months_left": months_left, "remaining": round(remaining, 2),
+                "required_monthly": required, "feasible": required <= avg_monthly_over,
+                "progress": round(balance / total_cost * 100, 1) if total_cost > 0 else 0,
+            })
+        out.append(goal)
+    return {"goals": out, "total_monthly": round(total_monthly, 2)}
