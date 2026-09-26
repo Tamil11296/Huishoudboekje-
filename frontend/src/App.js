@@ -30,7 +30,13 @@ function Protected({ children }) {
 }
 
 function Shell({ children }) {
-  const { currentHousehold, user } = useApp();
+  const { currentHousehold, user, ready } = useApp();
+  if (!ready)
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Laden...
+      </div>
+    );
   if (user && !currentHousehold) return <Navigate to="/onboarding" replace />;
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col antialiased">

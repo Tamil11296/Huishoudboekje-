@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import api from "@/lib/api";
@@ -13,11 +13,19 @@ import {
 } from "@/components/ui/select";
 
 export default function Onboarding() {
-  const { t, loadHouseholds, setCurrentId, logout } = useApp();
+  const { t, loadHouseholds, setCurrentId, logout, ready, currentHousehold } = useApp();
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [split, setSplit] = useState("5050");
   const [busy, setBusy] = useState(false);
+
+  if (!ready)
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Laden...
+      </div>
+    );
+  if (currentHousehold) return <Navigate to="/" replace />;
 
   const create = async (e) => {
     e.preventDefault();

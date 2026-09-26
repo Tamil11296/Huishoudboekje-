@@ -11,6 +11,7 @@ export function AppProvider({ children }) {
   const [currentId, setCurrentId] = useState(localStorage.getItem("hh_id") || null);
   const [lang, setLang] = useState(localStorage.getItem("lang") || "nl");
   const [theme, setTheme] = useState(localStorage.getItem("theme") || "light");
+  const [ready, setReady] = useState(false); // true once auth + households resolved
 
   const t = useCallback((key) => translations[lang][key] || translations.nl[key] || key, [lang]);
 
@@ -41,6 +42,8 @@ export function AppProvider({ children }) {
       await loadHouseholds();
     } catch {
       setUser(null);
+    } finally {
+      setReady(true);
     }
   }, [loadHouseholds]);
 
@@ -65,7 +68,7 @@ export function AppProvider({ children }) {
   const value = {
     user, setUser, households, setHouseholds, loadHouseholds,
     currentId, setCurrentId, currentHousehold,
-    lang, setLang, theme, setTheme, t, logout, checkAuth,
+    lang, setLang, theme, setTheme, t, logout, checkAuth, ready,
   };
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
