@@ -224,6 +224,8 @@ export const translations = {
     col_current: "Huidig",
     col_proposed: "Voorstel",
     confirm: "Bevestigen",
+    quick_add_expense: "Snel uitgave toevoegen",
+    added: "Toegevoegd",
   },
   en: {
     app_name: "Household Budget & Building Deposit",
@@ -441,5 +443,7 @@ export const translations = {
     col_current: "Current",
     col_proposed: "Proposed",
     confirm: "Confirm",
+    quick_add_expense: "Quick add expense",
+    added: "Added",
   },
 };

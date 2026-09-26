@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend,
@@ -6,11 +6,13 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
-  FileSpreadsheet, FileText, Sparkles, AlertTriangle, Coins,
+  FileSpreadsheet, FileText, Sparkles, AlertTriangle, Coins, Zap, Plus,
 } from "lucide-react";
+import { toast } from "sonner";
 import api, { downloadFile } from "@/lib/api";
-import { eur, pct } from "@/lib/format";
+import { eur, pct, apiErr } from "@/lib/format";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useApp } from "@/context/AppContext";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -63,15 +65,14 @@ export default function Dashboard() {
   const [selectedCat, setSelectedCat] = useState(null);
   const [pots, setGoals] = useState(null);
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     if (!currentId) return;
     api.get(`/households/${currentId}/dashboard`, { params: { year } })
-      .then((r) => setData(r.data))
-      .catch(() => {});
+      .then((r) => setData(r.data)).catch(() => {});
     api.get(`/households/${currentId}/goals-summary`)
-      .then((r) => setGoals(r.data))
-      .catch(() => {});
+      .then((r) => setGoals(r.data)).catch(() => {});
   }, [currentId, year]);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const personName = useMemo(() => {
     const map = {};
@@ -143,6 +144,13 @@ export default function Dashboard() {
           <span><span className="font-semibold">{overCount}</span> {t("goals_over_budget")}</span>
         </motion.div>
       )}
+
+      <QuickExpense
+        currentId={currentId}
+        cats={currentHousehold?.categories?.expense || []}
+        defaultMonth={data.current_month ? `${data.year}-${String(data.current_month).padStart(2, "0")}` : `${data.year}-01`}
+        onAdded={loadData}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" data-testid="dashboard-kpis">
         <Kpi icon={Wallet} label={t("total_income")} value={eur(a.income)} />
@@ -425,5 +433,54 @@ function Row({ label, value }) {
       <span className="text-muted-foreground">{label}</span>
       <span className="font-num">{value}</span>
     </div>
+  );
+}
+
+
+function QuickExpense({ currentId, cats, defaultMonth, onAdded }) {
+  const { t } = useApp();
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
+  const [desc, setDesc] = useState("");
+  const [month, setMonth] = useState(defaultMonth);
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    if (!category || !amount) { toast.error(t("category") + " + " + t("amount")); return; }
+    setBusy(true);
+    try {
+      await api.post(`/households/${currentId}/variable-expenses`, {
+        category, amount: Number(amount), description: desc || category, month, paid_by: "joint",
+      });
+      toast.success(t("added"));
+      setAmount(""); setDesc("");
+      onAdded();
+    } catch (e) { toast.error(apiErr(e)); }
+    finally { setBusy(false); }
+  };
+  const onKey = (e) => { if (e.key === "Enter") add(); };
+  return (
+    <Card className="p-4" data-testid="quick-expense">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 font-heading font-semibold text-sm shrink-0">
+          <Zap className="h-4 w-4 text-amber-500" /> {t("quick_add_expense")}
+        </div>
+        <div className="w-44">
+          <Select value={category} onValueChange={setCategory}>
+            <SelectTrigger data-testid="quick-expense-category"><SelectValue placeholder={t("category")} /></SelectTrigger>
+            <SelectContent>
+              {cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Input type="number" step="0.01" placeholder={t("amount")} value={amount} onKeyDown={onKey}
+               onChange={(e) => setAmount(e.target.value)} className="w-28 font-num" data-testid="quick-expense-amount" />
+        <Input placeholder={t("description")} value={desc} onKeyDown={onKey}
+               onChange={(e) => setDesc(e.target.value)} className="flex-1 min-w-[120px]" data-testid="quick-expense-desc" />
+        <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-40" data-testid="quick-expense-month" />
+        <Button onClick={add} disabled={busy} className="gap-1 rounded-full" data-testid="quick-expense-add">
+          <Plus className="h-4 w-4" /> {t("add")}
+        </Button>
+      </div>
+    </Card>
   );
 }
