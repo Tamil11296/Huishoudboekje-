@@ -1,0 +1,44 @@
+{
+  "summary": "Verified bouwdepot linked-invoice double-counting fix (backend) and Dashboard Cumulatief after-pots running total (frontend). All 3 backend pytest cases passed and dashboard renders correctly with expected after-pots cumulative values.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "backend_verification": {
+    "test_linked_term_invoice_does_not_double_count": "PASS",
+    "measured_values": {
+      "BEFORE": {"still_to_submit": 11400.0, "submitted_not_paid": 8600.0, "paid_out": 24800.0, "freely_available": 33200.0},
+      "AFTER_5000_submitted": {"still_to_submit": 6400.0, "submitted_not_paid": 13600.0, "paid_out": 24800.0, "freely_available": 33200.0},
+      "AFTER_3000_paid": {"still_to_submit": 3400.0, "submitted_not_paid": 13600.0, "paid_out": 27800.0, "freely_available": 33200.0},
+      "AFTER_5000_overage": {"still_to_submit": 0.0, "submitted_not_paid": 18600.0, "paid_out": 27800.0, "freely_available": 31600.0, "overage": 1600},
+      "RESTORED_after_cleanup": {"still_to_submit": 11400.0, "submitted_not_paid": 8600.0, "paid_out": 24800.0, "freely_available": 33200.0}
+    },
+    "regression_new_accepted_offerte_counts_in_still_to_submit": "PASS (+2500)",
+    "regression_old_style_offerte_with_invoice_amount_excluded": "PASS (unchanged)",
+    "cleanup": "All created test invoices deleted; summary restored to baseline"
+  },
+  "frontend_verification": {
+    "months_table_cumulatief_after_pots": "PASS",
+    "monthly_pots_total": 4796,
+    "sample_rows": {
+      "Januari": {"over": 4120, "cumulatief": -676},
+      "Februari": {"over": 3880, "cumulatief": -1592},
+      "December": {"over": 4120, "cumulatief": -6000}
+    },
+    "computation_check": "Jan: 4120-4796=-676 OK; running total continues; Dec ends at -6000 matching header 'Vrij na potjes: -6.000'. Confirms cumAfterPots logic is applied (potsMonthly>0 path).",
+    "page_render": "No console errors on dashboard load"
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter5_bouwdepot_fix.py",
+    "/app/test_reports/pytest/iter5_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "compute_bouwdepot_summary child_committed logic mirrors submitted_not_paid/paid_out and correctly avoids double count; clamp at 0 works and overage flows into freely_available drop as intended."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter5_bouwdepot_fix.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026! (from review request)",
+  "seed_data_creation": "None persisted; all test invoices deleted",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend fixture uses household_id key (not id); depot uses bouwdepot_id; invoices use invoice_id. Login is httpOnly cookie via POST /api/auth/login. Demo accepted offerte for bouwdepot fix testing is supplier 'Groenaanleg Peters' amount 11400 with invoice_amount=null."
+}
