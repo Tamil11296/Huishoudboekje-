@@ -1,0 +1,33 @@
+{
+  "summary": "Iteration 8 (frontend-only): Verified export relocation + new QuickAddFab dialog flows. Login via email/password OK. Dashboard no longer renders export-pdf-btn / export-excel-btn (count=0/0). Settings page /instellingen renders both export buttons: PDF click -> 200 application/pdf, Excel click -> 200 xlsx. Quick-add dialog contents verified for all 3 tabs (quick-tab-variable / quick-tab-fixed / quick-tab-pot). Flows: Variable add (POST /variable-expenses -> 200, item_id returned, dialog closes), Preset chip quick-preset-Boodschappen (POST 200), Fixed add (POST /fixed-expenses -> 200), Pot Storting on pot 'Boodschappen extra' (POST /pots/{id}/deposit -> 200 {ok:true, already_saved:5.0}), Pot Uitgave with linked category dropdown (POST /variable-expenses -> 200). Zero console errors, zero pageerrors during flows. CRITICAL UI BUG: the FAB button is completely occluded by the AI-assistant floating button - both are positioned fixed bottom-6 right-6 with same 56x56 rect; ai-assistant-toggle has z-50 while quick-add-fab has z-40, so document.elementFromPoint(FAB center) returns ai-assistant-toggle. Playwright click on quick-add-fab times out with 'ai-assistant-toggle subtree intercepts pointer events'. Real users literally cannot click the new FAB. All dialog flow testing was only possible via JS-dispatched .click() to bypass the overlay.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Dashboard QuickAddFab vs AiAssistant floating toggle", "issue": "quick-add-fab (fixed bottom-6 right-6 z-40, 56x56) is fully covered by ai-assistant-toggle (fixed bottom-6 right-6 z-50, 56x56). elementFromPoint on the FAB center resolves to ai-assistant-toggle -> the new FAB is un-clickable for real users. Two floating buttons stacked at identical coordinates.", "selector": "[data-testid=\"quick-add-fab\"] vs [data-testid=\"ai-assistant-toggle\"]", "priority": "CRITICAL"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard bottom-right", "issues": ["Two overlapping FABs at exact same position - even if z-index fixed, visually only one is visible. Recommend offsetting one (e.g. FAB on bottom-6 right-6 and AI assistant on bottom-6 right-24, or a stacked FAB group)."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "CRITICAL: Reposition either quick-add-fab or ai-assistant-toggle so both are reachable. E.g. move AI assistant to right-24 (or bottom-24), or nest them in a stacked group. Just changing z-index is NOT enough because they overlap visually.",
+    "(minor) Consider cleaning up TEST_ rows created by this run: variable-expenses TEST_var_qadd, TEST_ preset 'Boodschappen', 'Boodschappen extra' (pot spend), fixed-expense TEST_fixed_qadd, and a +5.00 deposit on pot 'Boodschappen extra'."
+  ],
+  "critical_code_review_comments": [
+    "Dashboard.jsx line 450: quick-add-fab uses z-40; AiAssistant toggle uses z-50 with identical fixed positioning - the newer FAB is by design occluded. This is a regression introduced with the FAB feature.",
+    "PotForm (Dashboard.jsx ~L676): spend tab is disabled when pot has no linked categories - correct guard.",
+    "Settings.jsx L214-221: downloadFile helper correctly triggers /households/{hid}/export/{pdf|excel} - responses verified 200 with correct content-types.",
+    "Deposit endpoint POST /households/{hid}/pots/{pot_id}/deposit returns {ok:true, already_saved:<new>} - simple contract, works.",
+    "Nav testids present: nav-nav_dashboard, nav-nav_income, nav-nav_bouwdepot, nav-nav_goals, nav-nav_settings."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "Functional 100% (all POSTs 200, dialog opens/closes), Usability BLOCKED by FAB occlusion"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026! (from /app/memory/test_credentials.md)",
+  "seed_data_creation": "Created via UI (not cleaned up): 1 variable-expense TEST_var_qadd (Hypotheek 12.34), 1 variable-expense from preset Boodschappen 50, 1 fixed-expense TEST_fixed_qadd (Hypotheek 9.99), 1 variable-expense 'Boodschappen extra' 3.50 (pot spend), 1 deposit +5.00 on pot 'Boodschappen extra'.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Login uses email/password inputs [data-testid=email-input / password-input / submit-auth-btn] - the visible 'Google Sign in' button will redirect to Google OAuth, avoid matching by role/name. The quick-add-fab is currently physically un-clickable because of ai-assistant-toggle overlay - to test dialog flows you must dispatch a JS click: page.evaluate(\"document.querySelector('[data-testid=quick-add-fab]').click()\"). Once main agent fixes overlap, retest with normal .click(). Deposit response body is {ok:true, already_saved:N}. variable-expense id key is 'item_id'.",
+  "rca of the issue": "Root cause: Dashboard.jsx introduces quick-add-fab at classes 'fixed bottom-6 right-6 z-40 h-14 w-14' while the pre-existing AiAssistant.jsx renders ai-assistant-toggle at 'fixed bottom-6 right-6 z-50 h-14 w-14'. Both are 56x56 at (1840,1000) on 1920x1080. Higher z-index of AI toggle intercepts all pointer events on the FAB. Repro: login -> observe only the sparkles (AI) button bottom-right; try to click FAB -> click lands on AI toggle instead. Mitigation options: (a) move AI assistant to bottom-6 right-24 (or above the FAB with bottom-24 right-6); (b) hide AI assistant while dialog is open + shift when FAB visible; (c) merge both into a single expandable speed-dial control."
+}

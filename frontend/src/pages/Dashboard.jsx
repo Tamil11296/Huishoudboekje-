@@ -447,7 +447,7 @@ function QuickAddFab({ currentId, cats, persons, pots, defaultMonth, onAdded }) 
       <motion.button
         whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }}
         onClick={() => setOpen(true)} data-testid="quick-add-fab"
-        className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/30 grid place-items-center hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+        className="fixed bottom-6 right-24 z-40 h-14 w-14 rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/30 grid place-items-center hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
         title={t("quick_add")}>
         <Plus className="h-6 w-6" />
       </motion.button>

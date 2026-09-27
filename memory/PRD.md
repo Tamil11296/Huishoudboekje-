@@ -48,6 +48,14 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
   - Statusfilter boven facturentabel (Alle/Ingepland/Ingediend/Betaald/Te laat). Per-regel paperclip met telling-badge opent het venster om bijlagen te beheren. FE-screenshot geverifieerd (5 filters, veld aanwezig).
   - Deploy-fix: spookpin lintiq==0.1.3 uit requirements.txt verwijderd.
 
+- 2026-06 v10 (export verplaatst + snel-toevoegen popup):
+  - Export (PDF/Excel) verplaatst van dashboard-kop naar Instellingen (eigen "Export"-kaart, downloadFile).
+  - Snel-toevoegen: zwevende (+) FAB rechtsonder (bottom-6 right-24, links van de AI-knop om overlap te voorkomen) opent een dialoog met 3 tabs: Variabele last / Vaste last / Potje.
+    - Variabele last: categorie, bedrag, maand, omschrijving (+AI-categorie), persoon, snelknoppen → POST /variable-expenses.
+    - Vaste last: categorie, omschrijving, bedrag, frequentie, persoon, startdatum → POST /fixed-expenses.
+    - Potje: potje kiezen + modus Storting(+) → POST /households/{hid}/pots/{pot_id}/deposit (verhoogt already_saved) of Uitgave(−) → boekt variabele uitgave in gekoppelde categorie van het potje.
+  - Nieuw backend-endpoint: POST /households/{hid}/pots/{pot_id}/deposit. Alle flows geverifieerd door testing agent (POSTs 200, dialoog opent/sluit); FAB-overlap met AI-knop opgelost.
+
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.
 - P2: recurring monthly AI email report; bank/PSD2 auto-import; streaming AI responses.
