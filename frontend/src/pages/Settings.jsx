@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { UserPlus, Trash2, Plus, Copy, X, Crown, User } from "lucide-react";
-import api from "@/lib/api";
+import { UserPlus, Trash2, Plus, Copy, X, Crown, User, FileText, FileSpreadsheet } from "lucide-react";
+import api, { downloadFile } from "@/lib/api";
 import { apiErr } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
 import { Card } from "@/components/ui/card";
@@ -205,6 +205,20 @@ export default function Settings() {
               </div>
             </div>
           ))}
+        </div>
+      </Card>
+
+      <Card className="p-6 space-y-4">
+        <h2 className="font-heading text-lg font-semibold">{t("export")}</h2>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="gap-1" data-testid="export-pdf-btn"
+                  onClick={() => downloadFile(`/households/${currentId}/export/pdf`, `${currentHousehold?.name || "overzicht"}.pdf`)}>
+            <FileText className="h-4 w-4" /> PDF
+          </Button>
+          <Button variant="outline" className="gap-1" data-testid="export-excel-btn"
+                  onClick={() => downloadFile(`/households/${currentId}/export/excel`, `${currentHousehold?.name || "overzicht"}.xlsx`)}>
+            <FileSpreadsheet className="h-4 w-4" /> Excel
+          </Button>
         </div>
       </Card>
 

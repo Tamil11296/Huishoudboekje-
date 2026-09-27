@@ -495,6 +495,19 @@ async def distribute_goals(hid: str, apply: bool = False, user: dict = Depends(g
     return {"plan": plan, "avg_monthly_over": avg, "applied": apply}
 
 
+@api_router.post("/households/{hid}/pots/{pot_id}/deposit")
+async def pot_deposit(hid: str, pot_id: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
+    await require_household(hid, user)
+    amount = float(body.get("amount") or 0)
+    pot = await db.pots.find_one({"pot_id": pot_id, "household_id": hid})
+    if not pot:
+        raise HTTPException(status_code=404, detail="Potje niet gevonden")
+    new_saved = round(float(pot.get("already_saved") or 0) + amount, 2)
+    await db.pots.update_one({"pot_id": pot_id, "household_id": hid}, {"$set": {"already_saved": new_saved}})
+    await log_change(hid, user, "storting", f"{pot.get('name')}: +€{amount}")
+    return {"ok": True, "already_saved": new_saved}
+
+
 @api_router.post("/households/{hid}/goals/{pot_id}/tip")
 async def goal_tip(hid: str, pot_id: str, user: dict = Depends(get_current_user)):
     hh = await require_household(hid, user)

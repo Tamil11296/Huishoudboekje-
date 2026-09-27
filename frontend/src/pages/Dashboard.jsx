@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
-  FileSpreadsheet, FileText, Sparkles, AlertTriangle, Coins, Zap, Plus,
+  Sparkles, AlertTriangle, Coins, Zap, Plus,
 } from "lucide-react";
 import { toast } from "sonner";
 import api, { downloadFile } from "@/lib/api";
@@ -25,6 +25,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Label } from "@/components/ui/label";
 
 const statusStyle = {
   afgesloten: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -125,14 +127,6 @@ export default function Dashboard() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline" size="sm" className="gap-1" data-testid="export-pdf-btn"
-                  onClick={() => downloadFile(`/households/${currentId}/export/pdf`, `${currentHousehold?.name || "overzicht"}.pdf`)}>
-            <FileText className="h-4 w-4" /> PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1" data-testid="export-excel-btn"
-                  onClick={() => downloadFile(`/households/${currentId}/export/excel`, `${currentHousehold?.name || "overzicht"}.xlsx`)}>
-            <FileSpreadsheet className="h-4 w-4" /> Excel
-          </Button>
         </div>
       </div>
 
@@ -145,10 +139,11 @@ export default function Dashboard() {
         </motion.div>
       )}
 
-      <QuickExpense
+      <QuickAddFab
         currentId={currentId}
         cats={currentHousehold?.categories?.expense || []}
         persons={currentHousehold?.persons || []}
+        pots={pots?.goals || []}
         defaultMonth={data.current_month ? `${data.year}-${String(data.current_month).padStart(2, "0")}` : `${data.year}-01`}
         onAdded={loadData}
       />
@@ -440,7 +435,52 @@ function Row({ label, value }) {
 
 const PRESET_AMTS = { Boodschappen: 50, "Uit eten": 30, "Etentjes & uitjes": 30, Vervoer: 60, Kleding: 40, "Vrije tijd": 25 };
 
-function QuickExpense({ currentId, cats, persons, defaultMonth, onAdded }) {
+const FREQ = ["maandelijks", "wekelijks", "per_kwartaal", "halfjaarlijks", "jaarlijks", "eenmalig"];
+
+function QuickAddFab({ currentId, cats, persons, pots, defaultMonth, onAdded }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState("variable");
+  const done = () => { onAdded(); setOpen(false); };
+  return (
+    <>
+      <motion.button
+        whileHover={{ scale: 1.06 }} whileTap={{ scale: 0.94 }}
+        onClick={() => setOpen(true)} data-testid="quick-add-fab"
+        className="fixed bottom-6 right-6 z-40 h-14 w-14 rounded-full bg-slate-900 text-white shadow-lg shadow-slate-900/30 grid place-items-center hover:bg-slate-800 dark:bg-emerald-600 dark:hover:bg-emerald-500"
+        title={t("quick_add")}>
+        <Plus className="h-6 w-6" />
+      </motion.button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="bg-popover max-h-[90vh] overflow-y-auto" data-testid="quick-add-dialog">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2">
+              <Zap className="h-5 w-5 text-amber-500" /> {t("quick_add")}
+            </DialogTitle>
+          </DialogHeader>
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="grid grid-cols-3 w-full" data-testid="quick-add-tabs">
+              <TabsTrigger value="variable" data-testid="quick-tab-variable">{t("type_variable")}</TabsTrigger>
+              <TabsTrigger value="fixed" data-testid="quick-tab-fixed">{t("type_fixed")}</TabsTrigger>
+              <TabsTrigger value="pot" data-testid="quick-tab-pot">{t("type_pot")}</TabsTrigger>
+            </TabsList>
+            <TabsContent value="variable" className="pt-4">
+              <VariableForm currentId={currentId} cats={cats} persons={persons} defaultMonth={defaultMonth} onDone={done} />
+            </TabsContent>
+            <TabsContent value="fixed" className="pt-4">
+              <FixedForm currentId={currentId} cats={cats} persons={persons} onDone={done} />
+            </TabsContent>
+            <TabsContent value="pot" className="pt-4">
+              <PotForm currentId={currentId} pots={pots} persons={persons} defaultMonth={defaultMonth} onDone={done} />
+            </TabsContent>
+          </Tabs>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
   const { t } = useApp();
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
@@ -452,19 +492,18 @@ function QuickExpense({ currentId, cats, persons, defaultMonth, onAdded }) {
   const known = cats.filter((c) => PRESET_AMTS[c]);
   const rest = cats.filter((c) => !PRESET_AMTS[c]);
   const presets = [...known, ...rest].slice(0, 5).map((c) => ({ category: c, amount: PRESET_AMTS[c] || 25 }));
-
   const post = (c, amt, d) => api.post(`/households/${currentId}/variable-expenses`, {
     category: c, amount: Number(amt), description: d || c, month, paid_by: paidBy,
   });
   const add = async () => {
     if (!category || !amount) { toast.error(t("category") + " + " + t("amount")); return; }
     setBusy(true);
-    try { await post(category, amount, desc); toast.success(t("added")); setAmount(""); setDesc(""); onAdded(); }
+    try { await post(category, amount, desc); toast.success(t("added")); onDone(); }
     catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
   };
   const quick = async (p) => {
     setBusy(true);
-    try { await post(p.category, p.amount, p.category); toast.success(`${p.category} ${eur(p.amount)}`); onAdded(); }
+    try { await post(p.category, p.amount, p.category); toast.success(`${p.category} ${eur(p.amount)}`); onDone(); }
     catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
   };
   const suggest = async () => {
@@ -478,43 +517,41 @@ function QuickExpense({ currentId, cats, persons, defaultMonth, onAdded }) {
       }
     } catch (e) { /* silent */ } finally { setSuggesting(false); }
   };
-  const onKey = (e) => { if (e.key === "Enter") add(); };
-
   return (
-    <Card className="p-4 space-y-3" data-testid="quick-expense">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2 font-heading font-semibold text-sm shrink-0">
-          <Zap className="h-4 w-4 text-amber-500" /> {t("quick_add_expense")}
-        </div>
-        <div className="w-40">
-          <Select value={category} onValueChange={setCategory}>
-            <SelectTrigger data-testid="quick-expense-category"><SelectValue placeholder={t("category")} /></SelectTrigger>
-            <SelectContent>{cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
-          </Select>
-        </div>
-        <Input type="number" step="0.01" placeholder={t("amount")} value={amount} onKeyDown={onKey}
-               onChange={(e) => setAmount(e.target.value)} className="w-24 font-num" data-testid="quick-expense-amount" />
-        <div className="relative flex-1 min-w-[140px]">
-          <Input placeholder={t("description")} value={desc} onKeyDown={onKey} onBlur={suggest}
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>{t("category")}</Label>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger data-testid="quick-expense-category"><SelectValue placeholder={t("category")} /></SelectTrigger>
+          <SelectContent>{cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label>{t("amount")}</Label>
+          <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="font-num" data-testid="quick-expense-amount" /></div>
+        <div className="space-y-1.5"><Label>{t("month")}</Label>
+          <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} data-testid="quick-expense-month" /></div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>{t("description")}</Label>
+        <div className="relative">
+          <Input placeholder={t("description")} value={desc} onBlur={suggest}
                  onChange={(e) => setDesc(e.target.value)} className="pr-9" data-testid="quick-expense-desc" />
           <button type="button" onClick={suggest} disabled={suggesting || !desc} title={t("ai_suggested")}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 disabled:opacity-40" data-testid="quick-expense-ai">
             <Sparkles className="h-4 w-4" />
           </button>
         </div>
-        <div className="w-32">
-          <Select value={paidBy} onValueChange={setPaidBy}>
-            <SelectTrigger data-testid="quick-expense-person"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="joint">{t("joint")}</SelectItem>
-              {persons.map((p) => <SelectItem key={p.person_id} value={p.person_id}>{p.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="w-36" data-testid="quick-expense-month" />
-        <Button onClick={add} disabled={busy} className="gap-1 rounded-full" data-testid="quick-expense-add">
-          <Plus className="h-4 w-4" /> {t("add")}
-        </Button>
+      </div>
+      <div className="space-y-1.5">
+        <Label>{t("paid_by")}</Label>
+        <Select value={paidBy} onValueChange={setPaidBy}>
+          <SelectTrigger data-testid="quick-expense-person"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="joint">{t("joint")}</SelectItem>
+            {persons.map((p) => <SelectItem key={p.person_id} value={p.person_id}>{p.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
       </div>
       {presets.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
@@ -528,6 +565,147 @@ function QuickExpense({ currentId, cats, persons, defaultMonth, onAdded }) {
           ))}
         </div>
       )}
-    </Card>
+      <Button onClick={add} disabled={busy} className="w-full gap-1 rounded-full" data-testid="quick-expense-add">
+        <Plus className="h-4 w-4" /> {t("add")}
+      </Button>
+    </div>
+  );
+}
+
+function FixedForm({ currentId, cats, persons, onDone }) {
+  const { t } = useApp();
+  const [category, setCategory] = useState("");
+  const [desc, setDesc] = useState("");
+  const [amount, setAmount] = useState("");
+  const [frequency, setFrequency] = useState("maandelijks");
+  const [paidBy, setPaidBy] = useState("joint");
+  const [startDate, setStartDate] = useState("");
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    if (!category || !amount || !desc) { toast.error(t("category") + " + " + t("amount")); return; }
+    setBusy(true);
+    try {
+      await api.post(`/households/${currentId}/fixed-expenses`, {
+        category, description: desc, amount: Number(amount), frequency, paid_by: paidBy, start_date: startDate || null,
+      });
+      toast.success(t("added")); onDone();
+    } catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>{t("category")}</Label>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger data-testid="quick-fixed-category"><SelectValue placeholder={t("category")} /></SelectTrigger>
+          <SelectContent>{cats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-1.5"><Label>{t("description")}</Label>
+        <Input value={desc} onChange={(e) => setDesc(e.target.value)} data-testid="quick-fixed-desc" /></div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label>{t("amount")}</Label>
+          <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="font-num" data-testid="quick-fixed-amount" /></div>
+        <div className="space-y-1.5"><Label>{t("frequency")}</Label>
+          <Select value={frequency} onValueChange={setFrequency}>
+            <SelectTrigger data-testid="quick-fixed-freq"><SelectValue /></SelectTrigger>
+            <SelectContent>{FREQ.map((f) => <SelectItem key={f} value={f}>{t(`freq_${f}`)}</SelectItem>)}</SelectContent>
+          </Select></div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5"><Label>{t("paid_by")}</Label>
+          <Select value={paidBy} onValueChange={setPaidBy}>
+            <SelectTrigger data-testid="quick-fixed-person"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="joint">{t("joint")}</SelectItem>
+              {persons.map((p) => <SelectItem key={p.person_id} value={p.person_id}>{p.name}</SelectItem>)}
+            </SelectContent>
+          </Select></div>
+        <div className="space-y-1.5"><Label>{t("start_date")}</Label>
+          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="quick-fixed-start" /></div>
+      </div>
+      <Button onClick={add} disabled={busy} className="w-full gap-1 rounded-full" data-testid="quick-fixed-add">
+        <Plus className="h-4 w-4" /> {t("add")}
+      </Button>
+    </div>
+  );
+}
+
+function PotForm({ currentId, pots, persons, defaultMonth, onDone }) {
+  const { t } = useApp();
+  const [potId, setPotId] = useState(pots[0]?.pot_id || "");
+  const [mode, setMode] = useState("deposit");
+  const [amount, setAmount] = useState("");
+  const [desc, setDesc] = useState("");
+  const [month, setMonth] = useState(defaultMonth);
+  const [paidBy, setPaidBy] = useState("joint");
+  const [category, setCategory] = useState("");
+  const [busy, setBusy] = useState(false);
+  const pot = pots.find((p) => p.pot_id === potId);
+  const potCats = pot?.categories || [];
+  if (!pots.length) return <p className="text-muted-foreground text-sm py-6 text-center">{t("none_yet")}</p>;
+  const add = async () => {
+    if (!potId || !amount) { toast.error(t("select_pot") + " + " + t("amount")); return; }
+    setBusy(true);
+    try {
+      if (mode === "deposit") {
+        await api.post(`/households/${currentId}/pots/${potId}/deposit`, { amount: Number(amount) });
+        toast.success(t("deposit_done"));
+      } else {
+        const c = category || potCats[0];
+        if (!c) { toast.error(t("category")); setBusy(false); return; }
+        await api.post(`/households/${currentId}/variable-expenses`, {
+          category: c, amount: Number(amount), description: desc || pot?.name, month, paid_by: paidBy,
+        });
+        toast.success(t("added"));
+      }
+      onDone();
+    } catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
+  };
+  return (
+    <div className="space-y-4">
+      <div className="space-y-1.5">
+        <Label>{t("select_pot")}</Label>
+        <Select value={potId} onValueChange={setPotId}>
+          <SelectTrigger data-testid="quick-pot-select"><SelectValue placeholder={t("select_pot")} /></SelectTrigger>
+          <SelectContent>{pots.map((p) => <SelectItem key={p.pot_id} value={p.pot_id}>{p.name}</SelectItem>)}</SelectContent>
+        </Select>
+      </div>
+      <Tabs value={mode} onValueChange={setMode}>
+        <TabsList className="grid grid-cols-2 w-full">
+          <TabsTrigger value="deposit" data-testid="quick-pot-mode-deposit">{t("pot_deposit")}</TabsTrigger>
+          <TabsTrigger value="spend" data-testid="quick-pot-mode-spend" disabled={!potCats.length}>{t("pot_spend")}</TabsTrigger>
+        </TabsList>
+      </Tabs>
+      <div className="space-y-1.5"><Label>{t("amount")}</Label>
+        <Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="font-num" data-testid="quick-pot-amount" /></div>
+      {mode === "spend" && potCats.length > 0 && (
+        <>
+          <div className="space-y-1.5">
+            <Label>{t("category")}</Label>
+            <Select value={category || potCats[0]} onValueChange={setCategory}>
+              <SelectTrigger data-testid="quick-pot-category"><SelectValue /></SelectTrigger>
+              <SelectContent>{potCats.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5"><Label>{t("month")}</Label>
+              <Input type="month" value={month} onChange={(e) => setMonth(e.target.value)} data-testid="quick-pot-month" /></div>
+            <div className="space-y-1.5"><Label>{t("paid_by")}</Label>
+              <Select value={paidBy} onValueChange={setPaidBy}>
+                <SelectTrigger data-testid="quick-pot-person"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="joint">{t("joint")}</SelectItem>
+                  {persons.map((p) => <SelectItem key={p.person_id} value={p.person_id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select></div>
+          </div>
+          <div className="space-y-1.5"><Label>{t("description")}</Label>
+            <Input value={desc} onChange={(e) => setDesc(e.target.value)} data-testid="quick-pot-desc" /></div>
+        </>
+      )}
+      <Button onClick={add} disabled={busy} className="w-full gap-1 rounded-full" data-testid="quick-pot-add">
+        <Plus className="h-4 w-4" /> {mode === "deposit" ? t("pot_deposit") : t("add")}
+      </Button>
+    </div>
   );
 }
