@@ -103,6 +103,34 @@ async def send_email(*, to: str, subject: str, html: str) -> str | None:
         return None
 
 
+def pot_reminder_email_html(household_name: str, pots: list, app_url: str) -> str:
+    rows = "".join(
+        f'<tr><td style="padding:6px 0;color:#334155">{escape(p["name"])}</td>'
+        f'<td style="padding:6px 0;text-align:right;color:#0f172a;font-weight:bold">&euro;{p["amount"]:.0f}/mnd</td></tr>'
+        for p in pots
+    )
+    link = f'{app_url}/doelen' if app_url else ''
+    btn = (f'<p style="margin:28px 0"><a href="{escape(link)}" '
+           f'style="background:#0f172a;color:#ffffff;padding:12px 24px;border-radius:9999px;'
+           f'text-decoration:none;font-weight:bold">Inleg bevestigen</a></p>') if link else ''
+    return (
+        f'<table role="presentation" width="100%" style="background:#f8fafc;padding:24px">'
+        f'<tr><td align="center"><table role="presentation" width="520" '
+        f'style="background:#ffffff;border-radius:12px;font-family:Arial,sans-serif;'
+        f'border:1px solid #e2e8f0"><tr><td style="padding:32px">'
+        f'<p style="font-size:20px;font-weight:bold;color:#0f172a;margin:0 0 16px">'
+        f'Huishoudbudget &amp; Bouwdepot</p>'
+        f'<p style="color:#334155">Voor huishouden <strong>{escape(household_name)}</strong> is deze maand '
+        f'nog geen inleg bevestigd voor de volgende doelen &amp; sparen potjes:</p>'
+        f'<table role="presentation" width="100%" style="border-collapse:collapse;margin:12px 0">{rows}</table>'
+        f'<p style="color:#334155">Zet je het geld deze maand opzij? Bevestig het dan even in de app.</p>'
+        f'{btn}'
+        f'<p style="font-size:12px;color:#94a3b8">Je ontvangt deze herinnering omdat er nog openstaande '
+        f'potjes zijn. We vragen je nooit om je wachtwoord per e-mail.</p>'
+        f'</td></tr></table></td></tr></table>'
+    )
+
+
 def invite_email_html(inviter_name: str, household_name: str, invite_link: str) -> str:
     return (
         f'<table role="presentation" width="100%" style="background:#f8fafc;padding:24px">'

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const statusStyle = {
   afgesloten: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
@@ -86,12 +87,18 @@ export default function Dashboard() {
     return <div className="text-muted-foreground">{t("loading")}</div>;
 
   const a = data.annual;
-  const potsMonthly = pots?.total_monthly || 0;
-  const potsAnnual = Math.round(potsMonthly * 12 * 100) / 100;
+  const contribByMonth = pots?.contrib_by_month || {};
+  const contribYearTotal = Math.round(
+    Object.entries(contribByMonth).reduce((s, [k, v]) => (k.startsWith(String(year)) ? s + v : s), 0) * 100) / 100;
+  const monthContrib = (m) => contribByMonth[`${year}-${String(m).padStart(2, "0")}`] || 0;
+  const avgContrib = Math.round((contribYearTotal / (data.current_month || 12)) * 100) / 100;
+  const potsMonthly = avgContrib;
+  const potsAnnual = contribYearTotal;
   const annualFree = Math.round((a.over - potsAnnual) * 100) / 100;
+  const unconfirmed = pots?.unconfirmed_this_month || [];
   const cumAfterPots = (() => {
     let c = 0;
-    return data.months.map((m) => { c += (m.over - potsMonthly); return Math.round(c * 100) / 100; });
+    return data.months.map((m, i) => { c += (m.over - monthContrib(i + 1)); return Math.round(c * 100) / 100; });
   })();
   const chartData = data.months.map((m) => ({
     name: m.label.slice(0, 3),
@@ -100,10 +107,10 @@ export default function Dashboard() {
   }));
 
   const years = [year - 1, year, year + 1];
-  const savingsData = data.months.map((m) => ({
+  const savingsData = data.months.map((m, i) => ({
     name: m.label.slice(0, 3),
     [t("over")]: m.over,
-    [t("after_pots")]: Math.round((m.over - potsMonthly) * 100) / 100,
+    [t("after_pots")]: Math.round((m.over - monthContrib(i + 1)) * 100) / 100,
   }));
   const categoryData = Object.entries(data.expense_by_category || {}).map(([name, value]) => ({ name, value }));
   const potBudgets = (pots?.goals || []).filter((p) => (p.categories || []).length > 0 && p.monthly_amount > 0);
@@ -136,6 +143,16 @@ export default function Dashboard() {
           data-testid="budget-alert-banner">
           <AlertTriangle className="h-4 w-4 shrink-0" />
           <span><span className="font-semibold">{overCount}</span> {t("goals_over_budget")}</span>
+        </motion.div>
+      )}
+
+      {unconfirmed.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          data-testid="contribution-reminder-banner">
+          <Coins className="h-4 w-4 shrink-0" />
+          <span><span className="font-semibold">{unconfirmed.length}</span> {t("pots_unconfirmed")}: {unconfirmed.map((u) => u.name).join(", ")}</span>
+          <a href="/doelen" className="ml-auto underline font-medium shrink-0" data-testid="goto-goals-link">{t("confirm_now")}</a>
         </motion.div>
       )}
 
@@ -481,7 +498,7 @@ function QuickAddFab({ currentId, cats, persons, pots, defaultMonth, onAdded }) 
 }
 
 function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
-  const { t } = useApp();
+  const { t, currentHousehold, loadHouseholds } = useApp();
   const [category, setCategory] = useState("");
   const [amount, setAmount] = useState("");
   const [desc, setDesc] = useState("");
@@ -491,7 +508,10 @@ function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
   const [suggesting, setSuggesting] = useState(false);
   const known = cats.filter((c) => PRESET_AMTS[c]);
   const rest = cats.filter((c) => !PRESET_AMTS[c]);
-  const presets = [...known, ...rest].slice(0, 5).map((c) => ({ category: c, amount: PRESET_AMTS[c] || 25 }));
+  const stored = currentHousehold?.quick_presets;
+  const presets = (stored && stored.length)
+    ? stored
+    : [...known, ...rest].slice(0, 5).map((c) => ({ category: c, amount: PRESET_AMTS[c] || 25 }));
   const post = (c, amt, d) => api.post(`/households/${currentId}/variable-expenses`, {
     category: c, amount: Number(amt), description: d || c, month, paid_by: paidBy,
   });
@@ -501,10 +521,17 @@ function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
     try { await post(category, amount, desc); toast.success(t("added")); onDone(); }
     catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
   };
-  const quick = async (p) => {
+  const addPreset = async (c, amt) => {
     setBusy(true);
-    try { await post(p.category, p.amount, p.category); toast.success(`${p.category} ${eur(p.amount)}`); onDone(); }
+    try { await post(c, amt, c); toast.success(`${c} ${eur(amt)}`); onDone(); }
     catch (e) { toast.error(apiErr(e)); } finally { setBusy(false); }
+  };
+  const saveDefault = async (c, amt) => {
+    const base = (stored && stored.length) ? stored.map((x) => ({ ...x })) : presets.map((x) => ({ ...x }));
+    const i = base.findIndex((x) => x.category === c);
+    if (i >= 0) base[i] = { category: c, amount: amt }; else base.push({ category: c, amount: amt });
+    try { await api.patch(`/households/${currentId}`, { quick_presets: base }); await loadHouseholds(); toast.success(t("saved")); }
+    catch (e) { toast.error(apiErr(e)); }
   };
   const suggest = async () => {
     if (!desc || category) return;
@@ -557,11 +584,7 @@ function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">{t("quick_presets")}:</span>
           {presets.map((p) => (
-            <button key={p.category} type="button" onClick={() => quick(p)} disabled={busy}
-              className="px-3 py-1 rounded-full text-xs border border-border hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors font-num"
-              data-testid={`quick-preset-${p.category}`}>
-              {p.category} {eur(p.amount)}
-            </button>
+            <PresetChip key={p.category} preset={p} busy={busy} onAdd={addPreset} onSaveDefault={saveDefault} />
           ))}
         </div>
       )}
@@ -648,7 +671,7 @@ function PotForm({ currentId, pots, persons, defaultMonth, onDone }) {
     setBusy(true);
     try {
       if (mode === "deposit") {
-        await api.post(`/households/${currentId}/pots/${potId}/deposit`, { amount: Number(amount) });
+        await api.post(`/households/${currentId}/pots/${potId}/contribute`, { amount: Number(amount), month });
         toast.success(t("deposit_done"));
       } else {
         const c = category || potCats[0];
@@ -707,5 +730,37 @@ function PotForm({ currentId, pots, persons, defaultMonth, onDone }) {
         <Plus className="h-4 w-4" /> {mode === "deposit" ? t("pot_deposit") : t("add")}
       </Button>
     </div>
+  );
+}
+
+function PresetChip({ preset, busy, onAdd, onSaveDefault }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState(String(preset.amount));
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setVal(String(preset.amount)); }}>
+      <PopoverTrigger asChild>
+        <button type="button" disabled={busy}
+          className="px-3 py-1 rounded-full text-xs border border-border hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 transition-colors font-num"
+          data-testid={`quick-preset-${preset.category}`}>
+          {preset.category} {eur(preset.amount)}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 space-y-2 bg-popover" data-testid={`preset-popover-${preset.category}`}>
+        <Label className="text-xs">{preset.category}</Label>
+        <Input type="number" step="0.01" value={val} autoFocus onChange={(e) => setVal(e.target.value)}
+               className="font-num" data-testid={`preset-amount-${preset.category}`} />
+        <Button size="sm" className="w-full rounded-full gap-1" disabled={busy}
+                onClick={() => { onAdd(preset.category, Number(val)); setOpen(false); }}
+                data-testid={`preset-add-${preset.category}`}>
+          <Plus className="h-4 w-4" /> {t("add")}
+        </Button>
+        <button type="button" className="text-[11px] text-muted-foreground hover:text-foreground w-full text-center"
+                onClick={() => { onSaveDefault(preset.category, Number(val)); setOpen(false); }}
+                data-testid={`preset-savedefault-${preset.category}`}>
+          {t("save_default")}
+        </button>
+      </PopoverContent>
+    </Popover>
   );
 }

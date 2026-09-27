@@ -1,0 +1,8 @@
+crons:
+  - name: pot-reminders
+    description: "Maandelijkse herinnering om inleg in doelen & sparen potjes te bevestigen"
+    cron: "0 9 28 * *"
+    endpoint: "{{BASE_URL}}/api/cron/pot-reminders"
+    method: POST
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    enabled: true

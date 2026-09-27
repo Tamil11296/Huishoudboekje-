@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import RecordDialog from "@/components/RecordDialog";
 
 export default function Goals() {
@@ -71,6 +72,14 @@ export default function Goals() {
     catch (e) { toast.error(apiErr(e)); }
     finally { setTipBusy(null); }
   };
+  const confirmOne = async (potId, amount, month) => {
+    try { await api.post(`/households/${currentId}/pots/${potId}/contribute`, { amount, month }); toast.success(t("deposit_done")); load(); }
+    catch (e) { toast.error(apiErr(e)); }
+  };
+  const confirmAll = async () => {
+    try { await api.post(`/households/${currentId}/pots/confirm-all`, {}); toast.success(t("deposit_done")); load(); }
+    catch (e) { toast.error(apiErr(e)); }
+  };
 
   if (!summary) return <div className="text-muted-foreground">{t("loading")}</div>;
 
@@ -87,6 +96,11 @@ export default function Goals() {
           </p>
         </div>
         <div className="flex gap-2">
+          {summary.unconfirmed_this_month?.length > 0 && (
+            <Button variant="outline" className="gap-1 rounded-full" onClick={confirmAll} data-testid="confirm-all-btn">
+              <CheckCircle2 className="h-4 w-4" /> {t("confirm_all_pots")}
+            </Button>
+          )}
           <Button variant="outline" className="gap-1 rounded-full" onClick={distribute} data-testid="distribute-btn">
             <Wand2 className="h-4 w-4" /> {t("auto_distribute")}
           </Button>
@@ -95,6 +109,15 @@ export default function Goals() {
           </Button>
         </div>
       </div>
+
+      {summary.unconfirmed_this_month?.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          data-testid="goals-reminder-banner">
+          <AlertTriangle className="h-4 w-4 shrink-0" />
+          <span><span className="font-semibold">{summary.unconfirmed_this_month.length}</span> {t("pots_unconfirmed")}: {summary.unconfirmed_this_month.map((u) => u.name).join(", ")}</span>
+        </motion.div>
+      )}
 
       {!summary.goals.length && <Card className="p-10 text-center text-muted-foreground">{t("none_yet")}</Card>}
 
@@ -153,6 +176,19 @@ export default function Goals() {
                   <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{t("pot_balance")}</div>
                   <div className={`font-num font-bold text-3xl mt-1 ${g.balance >= 0 ? "text-emerald-600" : "text-rose-600"}`}>{eur(g.balance)}</div>
                 </div>
+
+                {g.needs_contribution && (
+                  <div className={`flex items-center justify-between gap-2 text-sm rounded-lg p-2.5 ${g.confirmed_this_month ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300" : "bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300"}`} data-testid={`goal-inleg-${g.pot_id}`}>
+                    {g.confirmed_this_month ? (
+                      <span className="flex items-center gap-1.5"><CheckCircle2 className="h-4 w-4" /> {t("contributed_this_month")}: <span className="font-num font-semibold">{eur(g.contributed_this_month)}</span></span>
+                    ) : (
+                      <>
+                        <span className="flex items-center gap-1.5"><AlertTriangle className="h-4 w-4" /> {t("not_contributed")}</span>
+                        <ConfirmInleg pot={g} month={summary.month} onConfirm={confirmOne} />
+                      </>
+                    )}
+                  </div>
+                )}
 
                 {g.history && g.history.length > 1 && (
                   <div className="h-12" data-testid={`goal-history-${g.pot_id}`}>
@@ -303,6 +339,28 @@ export default function Goals() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+function ConfirmInleg({ pot, month, onConfirm }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const [val, setVal] = useState(String(pot.monthly_amount || ""));
+  return (
+    <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o) setVal(String(pot.monthly_amount || "")); }}>
+      <PopoverTrigger asChild>
+        <Button size="sm" className="h-7 rounded-full text-xs gap-1 shrink-0" data-testid={`confirm-inleg-btn-${pot.pot_id}`}>
+          <CheckCircle2 className="h-3 w-3" /> {t("confirm_contribution")}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 space-y-2 bg-popover" data-testid={`confirm-inleg-popover-${pot.pot_id}`}>
+        <Label className="text-xs">{t("monthly_deposit")}</Label>
+        <Input type="number" step="0.01" value={val} autoFocus onChange={(e) => setVal(e.target.value)} className="font-num" data-testid={`confirm-inleg-amount-${pot.pot_id}`} />
+        <Button size="sm" className="w-full rounded-full gap-1" onClick={() => { onConfirm(pot.pot_id, Number(val), month); setOpen(false); }} data-testid={`confirm-inleg-submit-${pot.pot_id}`}>
+          <CheckCircle2 className="h-4 w-4" /> {t("confirm")}
+        </Button>
+      </PopoverContent>
+    </Popover>
   );
 }
 

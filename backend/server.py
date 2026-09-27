@@ -1,9 +1,10 @@
 import os
 import io
 import json
+import hmac
 import logging
 from datetime import datetime, timezone
-from fastapi import FastAPI, APIRouter, Depends, HTTPException, Body, Response
+from fastapi import FastAPI, APIRouter, Depends, HTTPException, Body, Response, Header, BackgroundTasks
 from starlette.middleware.cors import CORSMiddleware
 
 from deps import db, get_current_user, new_id, hash_password, verify_password, log_change, public_user
@@ -11,7 +12,7 @@ from auth import router as auth_router
 from calc import (compute_dashboard, compute_bouwdepot_summary, compute_bouwpost_rollup,
                   compute_projects_summary, compute_pots_summary, compute_goals_summary,
                   derive_invoice_status)
-from emailer import send_email, invite_email_html
+from emailer import send_email, invite_email_html, pot_reminder_email_html
 from seed_data import seed_demo, ensure_demo_pots, ensure_demo_goal, migrate_projects_to_goals
 import uuid
 from fastapi import UploadFile, File
@@ -27,6 +28,7 @@ app = FastAPI()
 api_router = APIRouter(prefix="/api")
 
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "")
+WEBHOOK_CRON_SECRET = os.environ.get("WEBHOOK_CRON_SECRET", "")
 
 
 # ---------- helpers ----------
@@ -47,6 +49,41 @@ def require_owner(hh: dict, user: dict):
 @api_router.get("/")
 async def root():
     return {"message": "Huishoudbudget & Bouwdepot API"}
+
+
+async def _run_pot_reminders():
+    now = datetime.now(timezone.utc)
+    month = now.strftime("%Y-%m")
+    households = await db.households.find({}, {"_id": 0}).to_list(1000)
+    for hh in households:
+        pots = await db.pots.find({"household_id": hh["household_id"]}, {"_id": 0}).to_list(200)
+        unfunded = []
+        for pot in pots:
+            if (pot.get("categories") or []) or float(pot.get("monthly_amount") or 0) <= 0:
+                continue
+            if float((pot.get("contributions") or {}).get(month) or 0) > 0.005:
+                continue
+            unfunded.append({"name": pot.get("name"), "amount": float(pot.get("monthly_amount") or 0)})
+        if not unfunded:
+            continue
+        html = pot_reminder_email_html(hh["name"], unfunded, FRONTEND_URL)
+        for m in hh.get("members", []):
+            em = m.get("email")
+            if em:
+                await send_email(to=em,
+                                 subject=f"Herinnering: inleg doelen & sparen ({hh['name']})",
+                                 html=html)
+
+
+@api_router.post("/cron/pot-reminders")
+async def cron_pot_reminders(background: BackgroundTasks, authorization: str = Header(None)):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    if not WEBHOOK_CRON_SECRET or not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    if not hmac.compare_digest(authorization.split(" ", 1)[1], WEBHOOK_CRON_SECRET):
+        raise HTTPException(status_code=401, detail="unauthorized")
+    background.add_task(_run_pot_reminders)
+    return {"ok": True}
 
 
 # ---------- households ----------
@@ -72,6 +109,7 @@ async def create_household(body: dict = Body(...), user: dict = Depends(get_curr
             "bouwpost": ["Keuken", "Badkamer", "Tuin", "Overig"],
         },
         "quote_statuses": ["ontvangen", "geaccepteerd"],
+        "quick_presets": [],
         "split_rule": body.get("split_rule", "5050"),
         "currency": "EUR",
         "dashboard_year": datetime.now(timezone.utc).year,
@@ -92,7 +130,7 @@ async def get_household(hid: str, user: dict = Depends(get_current_user)):
 @api_router.patch("/households/{hid}")
 async def update_household(hid: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
     hh = await require_household(hid, user)
-    updates = {k: body[k] for k in ("name", "split_rule", "dashboard_year", "quote_statuses")
+    updates = {k: body[k] for k in ("name", "split_rule", "dashboard_year", "quote_statuses", "quick_presets")
                if k in body}
     if updates:
         await db.households.update_one({"household_id": hid}, {"$set": updates})
@@ -495,17 +533,43 @@ async def distribute_goals(hid: str, apply: bool = False, user: dict = Depends(g
     return {"plan": plan, "avg_monthly_over": avg, "applied": apply}
 
 
-@api_router.post("/households/{hid}/pots/{pot_id}/deposit")
-async def pot_deposit(hid: str, pot_id: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
+@api_router.post("/households/{hid}/pots/confirm-all")
+async def pots_confirm_all(hid: str, body: dict = Body(default={}), user: dict = Depends(get_current_user)):
     await require_household(hid, user)
-    amount = float(body.get("amount") or 0)
+    now = datetime.now(timezone.utc)
+    month = body.get("month") or now.strftime("%Y-%m")
+    amounts = body.get("amounts") or {}
+    pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
+    n = 0
+    for pot in pots:
+        if (pot.get("categories") or []) or float(pot.get("monthly_amount") or 0) <= 0:
+            continue
+        if float((pot.get("contributions") or {}).get(month) or 0) > 0.005:
+            continue
+        amt = float(amounts.get(pot["pot_id"], pot.get("monthly_amount")) or 0)
+        if amt <= 0:
+            continue
+        await db.pots.update_one({"pot_id": pot["pot_id"], "household_id": hid},
+                                 {"$inc": {f"contributions.{month}": round(amt, 2)}})
+        n += 1
+    if n:
+        await log_change(hid, user, "inleg", f"{n} potje(s) inleg bevestigd voor {month}")
+    return {"ok": True, "confirmed": n, "month": month}
+
+
+@api_router.post("/households/{hid}/pots/{pot_id}/contribute")
+async def pot_contribute(hid: str, pot_id: str, body: dict = Body(...), user: dict = Depends(get_current_user)):
+    await require_household(hid, user)
+    amount = round(float(body.get("amount") or 0), 2)
+    month = body.get("month") or datetime.now(timezone.utc).strftime("%Y-%m")
     pot = await db.pots.find_one({"pot_id": pot_id, "household_id": hid})
     if not pot:
         raise HTTPException(status_code=404, detail="Potje niet gevonden")
-    new_saved = round(float(pot.get("already_saved") or 0) + amount, 2)
-    await db.pots.update_one({"pot_id": pot_id, "household_id": hid}, {"$set": {"already_saved": new_saved}})
-    await log_change(hid, user, "storting", f"{pot.get('name')}: +€{amount}")
-    return {"ok": True, "already_saved": new_saved}
+    await db.pots.update_one({"pot_id": pot_id, "household_id": hid},
+                             {"$inc": {f"contributions.{month}": amount}})
+    await log_change(hid, user, "inleg", f"{pot.get('name')}: +€{amount} ({month})")
+    doc = await db.pots.find_one({"pot_id": pot_id, "household_id": hid}, {"_id": 0})
+    return {"ok": True, "month": month, "contribution": round((doc.get("contributions") or {}).get(month, 0), 2)}
 
 
 @api_router.post("/households/{hid}/goals/{pot_id}/tip")
@@ -553,7 +617,12 @@ async def goals_summary(hid: str, user: dict = Depends(get_current_user)):
         else:
             g["completed_at"] = existing
     res["avg_monthly_over"] = avg
-    res["free_surplus"] = round(avg - res["total_monthly"], 2)
+    res["free_surplus"] = round(avg - res.get("savings_planned_monthly", res["total_monthly"]), 2)
+    res["month"] = f"{year}-{cur_month:02d}" if cur_month else None
+    res["unconfirmed_this_month"] = [
+        {"pot_id": g["pot_id"], "name": g["name"], "monthly_amount": g["monthly_amount"]}
+        for g in res["goals"] if g.get("needs_contribution") and not g.get("confirmed_this_month")
+    ]
     return res
 
 

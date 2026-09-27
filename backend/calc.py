@@ -417,16 +417,21 @@ def compute_pots_summary(pots, variable_expenses, year, months_elapsed, current_
 
 def compute_goals_summary(pots, project_items, variable_expenses, year,
                           months_elapsed, current_month, avg_monthly_over):
-    """Unified goals: each pot is a goal with optional cost items + target date.
-    balance = already_saved + monthly*months_elapsed - spending in linked categories."""
+    """Unified goals. Envelope pots (with linked categories) use a monthly budget
+    projection. Savings pots (no categories) count ONLY confirmed monthly
+    contributions: balance = already_saved + sum(confirmed deposits) - spending."""
     today = date.today()
     out = []
     total_monthly = 0.0
+    savings_planned_monthly = 0.0
+    contrib_by_month = {}
     for pot in pots:
         cats = pot.get("categories") or []
         monthly = float(pot.get("monthly_amount") or 0)
         already = float(pot.get("already_saved") or 0)
+        contributions = pot.get("contributions") or {}
         total_monthly += monthly
+        is_saving = not cats
         spent_ytd = 0.0
         spent_month = 0.0
         spent_by_month = {}
@@ -439,13 +444,30 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
                     spent_ytd += amt
                 if mm == current_month:
                     spent_month += amt
-        allocated = round(monthly * months_elapsed, 2)
+        # confirmed contributions for this year, per month
+        contrib_by_m = {}
+        for mk, mv in contributions.items():
+            if str(mk)[:4] == str(year):
+                mm = int(str(mk)[5:7])
+                val = float(mv or 0)
+                contrib_by_m[mm] = contrib_by_m.get(mm, 0) + val
+                contrib_by_month[mk] = round(contrib_by_month.get(mk, 0) + val, 2)
+        contrib_ytd = round(sum(v for m, v in contrib_by_m.items() if m <= months_elapsed), 2)
+        contributed_this_month = round(contrib_by_m.get(current_month, 0), 2)
+
+        if is_saving:
+            allocated = contrib_ytd
+            savings_planned_monthly += monthly
+        else:
+            allocated = round(monthly * months_elapsed, 2)
         balance = round(already + allocated - spent_ytd, 2)
         history = []
-        cum = 0.0
+        cum_c = 0.0
+        cum_s = 0.0
         for m in range(1, max(months_elapsed, 1) + 1):
-            cum += spent_by_month.get(m, 0)
-            history.append({"m": m, "balance": round(already + monthly * m - cum, 2)})
+            cum_s += spent_by_month.get(m, 0)
+            cum_c = (cum_c + contrib_by_m.get(m, 0)) if is_saving else (monthly * m)
+            history.append({"m": m, "balance": round(already + cum_c - cum_s, 2)})
         items = [i for i in project_items if i.get("project_id") == pot["pot_id"]]
         total_cost = round(sum(float(i.get("amount") or 0) for i in items), 2)
         target_date = pot.get("target_date")
@@ -453,13 +475,17 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
         goal = {
             "pot_id": pot["pot_id"], "name": pot.get("name"), "categories": cats,
             "monthly_amount": round(monthly, 2), "already_saved": round(already, 2),
-            "allocated": allocated, "spent": round(spent_ytd, 2),
+            "allocated": round(allocated, 2), "spent": round(spent_ytd, 2),
             "spent_month": round(spent_month, 2), "balance": balance, "history": history,
             "note": pot.get("note", ""), "has_target": has_target,
             "target_date": target_date, "items": items, "total_cost": total_cost,
             "completed": False, "date_passed": False,
             "priority": pot.get("priority"), "completed_at": pot.get("completed_at"),
             "funded_by": pot.get("funded_by") or "joint",
+            "is_saving": is_saving,
+            "contributed_this_month": contributed_this_month,
+            "confirmed_this_month": contributed_this_month > 0.005,
+            "needs_contribution": is_saving and monthly > 0,
         }
         if has_target:
             td = _parse(target_date)
@@ -473,5 +499,12 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
                 "completed": total_cost > 0 and balance >= total_cost - 0.005,
                 "date_passed": bool(td and td < today),
             })
+        if goal["completed"]:
+            goal["needs_contribution"] = False
         out.append(goal)
-    return {"goals": out, "total_monthly": round(total_monthly, 2)}
+    return {
+        "goals": out,
+        "total_monthly": round(total_monthly, 2),
+        "savings_planned_monthly": round(savings_planned_monthly, 2),
+        "contrib_by_month": {k: round(v, 2) for k, v in contrib_by_month.items()},
+    }
