@@ -56,6 +56,15 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
     - Potje: potje kiezen + modus Storting(+) → POST /households/{hid}/pots/{pot_id}/deposit (verhoogt already_saved) of Uitgave(−) → boekt variabele uitgave in gekoppelde categorie van het potje.
   - Nieuw backend-endpoint: POST /households/{hid}/pots/{pot_id}/deposit. Alle flows geverifieerd door testing agent (POSTs 200, dialoog opent/sluit); FAB-overlap met AI-knop opgelost.
 
+- 2026-06 v11 (bevestigde inleg + herinneringen + instelbare snelknoppen):
+  - **Bevestigde inleg i.p.v. projectie**: spaarpotjes (zonder gekoppelde categorieën) tellen alleen daadwerkelijk bevestigde maandstortingen mee. `compute_goals_summary` splitst nu envelope-potjes (met categorieën → maandbudget-projectie) van spaardoelen (zonder categorieën → saldo = beginbedrag + som bevestigde stortingen − uitgaven). Lost de "doel bereikt terwijl je net begint"-bug op. `Inleg per maand` = streefbedrag/herinnering.
+  - **Endpoints**: POST /pots/{id}/contribute (`$inc contributions.{YYYY-MM}`), POST /pots/confirm-all (bevestigt alle onbevestigde spaarpotjes voor de maand). goals-summary geeft nu is_saving, needs_contribution, confirmed_this_month, contributed_this_month, contrib_by_month, unconfirmed_this_month, month, savings_planned_monthly.
+  - **Dashboard-overschot "na potjes"** trekt nu de *werkelijk bevestigde* stortingen per maand af (contrib_by_month) i.p.v. geplande maandbedragen; skip je een maand → vol overschot.
+  - **Maandbevestiging UI**: per spaarpotje "Bevestig inleg deze maand" (popover, aanpasbaar bedrag) + "Alle inleg bevestigen"-knop op /doelen. Herinneringsbanner op dashboard (met "Nu bevestigen"-link) én op /doelen als een potje deze maand nog geen inleg heeft.
+  - **E-mailherinnering** via platform-cron `.emergent/crons.yml` (pot-reminders, 28e v/d maand 09:00 UTC) → POST /api/cron/pot-reminders (Bearer WEBHOOK_CRON_SECRET, ackt 2xx + achtergrondtaak) → mailt leden met onbevestigde spaarpotjes (emailer.pot_reminder_email_html).
+  - **Instelbare snelknoppen**: quick-add presets komen uit household.quick_presets; klik op een chip opent een popover die om het bedrag vraagt (voorgevuld) + "Als standaard opslaan" (PATCH /households). Quick-add "Storting" schrijft nu naar /contribute (huidige maand).
+  - Getest door testing agent (iteration_9): alle flows OK, geen bugs; FAB-overlap uit iteration_8 opgelost (right-24 vs right-6).
+
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.
 - P2: recurring monthly AI email report; bank/PSD2 auto-import; streaming AI responses.
