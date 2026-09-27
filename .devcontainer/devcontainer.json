@@ -1,0 +1,14 @@
+{
+  "name": "Huishoudboekje demo",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
+  },
+  "postCreateCommand": "pip install -r backend/requirements-dev.txt && cd frontend && yarn install --non-interactive && yarn build",
+  "postAttachCommand": "python tools/demo/demo_server.py",
+  "forwardPorts": [8000],
+  "portsAttributes": {
+    "8000": { "label": "Huishoudboekje demo", "onAutoForward": "openBrowser" }
+  },
+  "hostRequirements": { "memory": "4gb" }
+}

@@ -156,3 +156,8 @@ def test_delete_household_removes_everything(owner):
     owner.post(f"{base}/pots", json={"name": "Vakantie", "monthly_amount": 100})
     assert owner.delete(base).status_code == 200
     assert owner.get("/api/households").json() == []
+
+
+def test_demo_mode_off_by_default():
+    c = TestClient(server.app)
+    assert c.get("/api/config").json()["demo"] is False

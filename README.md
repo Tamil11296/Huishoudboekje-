@@ -11,6 +11,19 @@ Geen Emergent, geen AI, geen tracking.
 
 ---
 
+## Eerst bekijken: demo in je browser (geen accounts nodig)
+
+1. Op GitHub: **Code → Codespaces → Create codespace on main**.
+2. Wacht een paar minuten; de app wordt gebouwd en opent vanzelf in een nieuw tabblad
+   (anders: tabblad **Ports** → poort 8000 → wereldbolletje).
+3. Klik **Inloggen als Robeson** of **Inloggen als Miraja**.
+
+De demo gebruikt onze cijfers uit Excel v5 in een tijdelijke database in het geheugen; wijzigingen
+verdwijnen bij herstarten. Stop de codespace als je klaar bent (**Codespaces → … → Stop**), dan
+telt hij niet mee in je gratis uren. De demo zit niet in de echte app.
+
+---
+
 ## In gebruik nemen (eenmalig, ±45 minuten)
 
 Je maakt drie accounts/onderdelen aan. Alle geheime waarden zet je bij Cloud Run, **nooit in de code**.

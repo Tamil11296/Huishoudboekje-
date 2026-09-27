@@ -60,7 +60,9 @@ async def root():
 async def public_config():
     """Openbare instellingen die de frontend nodig heeft (geen geheimen)."""
     from deps import GOOGLE_CLIENT_ID
-    return {"google_client_id": GOOGLE_CLIENT_ID}
+    # demo: alleen tools/demo/demo_server.py zet dit aan. In productie verifieert de backend
+    # altijd een echt Google-token, dus deze vlag geeft daar geen toegang.
+    return {"google_client_id": GOOGLE_CLIENT_ID, "demo": os.environ.get("DEMO_MODE") == "1"}
 
 
 # ---------- households ----------

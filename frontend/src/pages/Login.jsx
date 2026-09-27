@@ -30,6 +30,7 @@ export default function Login() {
   const btnRef = useRef(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [demo, setDemo] = useState(false);
 
   const afterLogin = () => {
     const pending = localStorage.getItem("pending_invite");
@@ -46,11 +47,30 @@ export default function Login() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const signIn = async (credential) => {
+    setBusy(true);
+    setError("");
+    try {
+      const { data } = await api.post("/auth/google", { credential });
+      setUser(data);
+      await loadHouseholds();
+      afterLogin();
+    } catch (e) {
+      setError(apiErr(e));
+      toast.error(apiErr(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const [{ data: cfg }] = await Promise.all([api.get("/config"), loadGsi()]);
+        const { data: cfg } = await api.get("/config");
+        if (cancelled) return;
+        if (cfg.demo) { setDemo(true); return; }
+        await loadGsi();
         if (cancelled) return;
         if (!cfg.google_client_id) {
           setError("Google-login is nog niet ingesteld (GOOGLE_CLIENT_ID ontbreekt).");
@@ -59,21 +79,7 @@ export default function Login() {
         window.google.accounts.id.initialize({
           client_id: cfg.google_client_id,
           ux_mode: "popup",
-          callback: async ({ credential }) => {
-            setBusy(true);
-            setError("");
-            try {
-              const { data } = await api.post("/auth/google", { credential });
-              setUser(data);
-              await loadHouseholds();
-              afterLogin();
-            } catch (e) {
-              setError(apiErr(e));
-              toast.error(apiErr(e));
-            } finally {
-              setBusy(false);
-            }
-          },
+          callback: ({ credential }) => signIn(credential),
         });
         if (btnRef.current) {
           window.google.accounts.id.renderButton(btnRef.current, {
@@ -117,7 +123,23 @@ export default function Login() {
           <h1 className="font-heading text-3xl font-extrabold tracking-tight">{t("login")}</h1>
           <p className="text-muted-foreground mt-1 text-sm">{t("app_name")}</p>
 
-          <div className="mt-8 flex justify-center min-h-[44px]" ref={btnRef} data-testid="google-login-btn" />
+          {demo ? (
+            <div className="mt-8 space-y-3" data-testid="demo-login">
+              <p className="text-sm rounded-lg bg-amber-50 text-amber-900 border border-amber-200 p-3">
+                Demomodus: gegevens staan alleen in het geheugen en verdwijnen bij herstarten.
+              </p>
+              <button type="button" onClick={() => signIn("robeson@demo.nl")} disabled={busy}
+                      className="w-full h-11 rounded-full bg-slate-900 text-white font-semibold">
+                Inloggen als Robeson (eigenaar)
+              </button>
+              <button type="button" onClick={() => signIn("miraja@demo.nl")} disabled={busy}
+                      className="w-full h-11 rounded-full border border-slate-300 font-semibold">
+                Inloggen als Miraja (partner)
+              </button>
+            </div>
+          ) : (
+            <div className="mt-8 flex justify-center min-h-[44px]" ref={btnRef} data-testid="google-login-btn" />
+          )}
 
           {busy && <p className="mt-4 text-sm text-center text-muted-foreground">{t("loading")}</p>}
           {error && (
