@@ -41,6 +41,7 @@ export default function BouwdepotPage() {
   const [summary, setSummary] = useState(null);
   const [depotId, setDepotId] = useState(null);
   const [dialog, setDialog] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   const load = useCallback(async () => {
     if (!currentId) return;
@@ -57,6 +58,7 @@ export default function BouwdepotPage() {
   );
   const posts = depot?.posts || [];
   const invoices = (summary?.invoices || []).filter((i) => i.bouwdepot_id === depotId);
+  const shownInvoices = statusFilter === "all" ? invoices : invoices.filter((i) => i.derived_status === statusFilter);
   const rawPosts = (summary?.bouwposten || []).filter((b) => b.bouwdepot_id === depotId);
 
   const cats = currentHousehold?.categories?.bouwpost || [];
@@ -144,11 +146,21 @@ export default function BouwdepotPage() {
     const cfg = configs[kind];
     const payload = { ...values, ...cfg.extra };
     try {
-      if (dialog?.initial) await api.put(`/households/${currentId}/${cfg.path}/${dialog.initial[cfg.id]}`, payload);
-      else await api.post(`/households/${currentId}/${cfg.path}`, payload);
+      let res;
+      if (dialog?.initial) res = await api.put(`/households/${currentId}/${cfg.path}/${dialog.initial[cfg.id]}`, payload);
+      else res = await api.post(`/households/${currentId}/${cfg.path}`, payload);
       toast.success(t("save"));
       load();
-    } catch (e) { toast.error(apiErr(e)); }
+      return res.data;
+    } catch (e) { toast.error(apiErr(e)); throw e; }
+  };
+
+  const uploadAttachment = async (id, f) => {
+    const fd = new FormData(); fd.append("file", f);
+    await api.post(`/households/${currentId}/invoices/${id}/attachment`, fd);
+  };
+  const deleteAttachment = async (id, attId) => {
+    await api.delete(`/households/${currentId}/invoices/${id}/attachment/${attId}`);
   };
 
   const del = async (kind, item) => {
@@ -296,8 +308,16 @@ export default function BouwdepotPage() {
           </Card>
 
           <Card className="p-0 overflow-hidden">
-            <div className="flex items-center justify-between p-5">
-              <h2 className="font-heading text-lg font-semibold">{t("invoices")}</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 p-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-heading text-lg font-semibold mr-1">{t("invoices")}</h2>
+                {[["all", t("all")], ["ingepland", t("st_ingepland")], ["ingediend", t("st_ingediend")], ["betaald", t("st_betaald")], ["telaat", t("st_telaat")]].map(([k, lbl]) => (
+                  <button key={k} type="button" onClick={() => setStatusFilter(k)} data-testid={`invoice-filter-${k}`}
+                    className={`px-3 py-1 rounded-full text-xs border transition-colors ${statusFilter === k ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900" : "border-border text-muted-foreground hover:border-slate-400"}`}>
+                    {lbl}
+                  </button>
+                ))}
+              </div>
               <Button size="sm" className="gap-1 rounded-full" onClick={() => openDialog("invoice")} data-testid="add-invoice-btn">
                 <Plus className="h-4 w-4" /> {t("add")}
               </Button>
@@ -318,7 +338,7 @@ export default function BouwdepotPage() {
                   <TableHead className="w-24">{t("actions")}</TableHead>
                 </TableRow></TableHeader>
                 <TableBody>
-                  {invoices.map((r) => (
+                  {shownInvoices.map((r) => (
                     <TableRow key={r.invoice_id} data-testid={`invoice-row-${r.invoice_id}`}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-1">
@@ -342,16 +362,17 @@ export default function BouwdepotPage() {
                       <TableCell className="font-num text-xs">{r.paid_on || "—"}</TableCell>
                       <TableCell>
                         <div className="flex gap-1">
-                          {r.attachment
-                            ? <a href={`${API}/api/households/${currentId}/invoices/${r.invoice_id}/attachment`} target="_blank" rel="noreferrer" title={t("view_attachment")} data-testid={`view-attachment-${r.invoice_id}`}><Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-600"><Paperclip className="h-4 w-4" /></Button></a>
-                            : <Button size="icon" variant="ghost" className="h-8 w-8" title={t("attachment")} onClick={() => pickFile(r.invoice_id)} data-testid={`upload-attachment-${r.invoice_id}`}><Paperclip className="h-4 w-4" /></Button>}
+                          <Button size="icon" variant="ghost" className="h-8 w-8 relative" title={t("attachments")} onClick={() => openDialog("invoice", r)} data-testid={`attachments-${r.invoice_id}`}>
+                            <Paperclip className={`h-4 w-4 ${r.attachments?.length ? "text-emerald-600" : ""}`} />
+                            {r.attachments?.length > 0 && <span className="absolute -top-1 -right-1 bg-emerald-600 text-white rounded-full text-[10px] h-4 w-4 grid place-items-center">{r.attachments.length}</span>}
+                          </Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openDialog("invoice", r)}><Pencil className="h-4 w-4" /></Button>
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-600" onClick={() => del("invoice", r)}><Trash2 className="h-4 w-4" /></Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {!invoices.length && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">{t("none_yet")}</TableCell></TableRow>}
+                  {!shownInvoices.length && <TableRow><TableCell colSpan={11} className="text-center text-muted-foreground py-8">{t("none_yet")}</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </div>
@@ -368,6 +389,11 @@ export default function BouwdepotPage() {
           postOpts={postOpts}
           statuses={statuses}
           onSubmit={(v) => save("invoice", v)}
+          currentId={currentId}
+          apiBase={API}
+          uploadAttachment={uploadAttachment}
+          deleteAttachment={deleteAttachment}
+          onChanged={load}
           testid="dialog-invoice"
         />
       )}

@@ -42,6 +42,11 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
   - Doel-financiering: `funded_by` (gezamenlijk/persoon) per doel, keuze in dialoog; "Slim verdelen" verdeelt per persoon diens eigen maandoverschot (net/12), restant stroomt naar gezamenlijke doelen.
   - Bouwdepot auto-status: `derive_invoice_status` (offerte: ontvangen/geaccepteerd; factuur: betaald/ingediend/ingepland/te laat) met gekleurde badges; `overdue_count` + te-laat-banner op de bouwdepotpagina.
   - Offerte-bijlage: PDF/afbeelding upload via Emergent object storage (backend/storage.py), opgeslagen als invoice.attachment; upload-knop (paperclip) + inline bekijken/download per regel. Backend curl (upload/download) + FE screenshot geverifieerd.
+- 2026-06 v9 (bijlagen + filter):
+  - Meerdere bijlagen per factuur/offerte: `attachments` array; endpoints POST (append, id per bijlage), GET /attachment/{id}, DELETE /attachment/{id}. Backward-compat met oud enkelvoudig `attachment`.
+  - Bijlage(n) direct in het toevoeg-/bewerk-venster (InvoiceDialog): meerdere bestanden kiezen, bestaande bijlagen bekijken/verwijderen; upload na opslaan (save geeft invoice terug).
+  - Statusfilter boven facturentabel (Alle/Ingepland/Ingediend/Betaald/Te laat). Per-regel paperclip met telling-badge opent het venster om bijlagen te beheren. FE-screenshot geverifieerd (5 filters, veld aanwezig).
+  - Deploy-fix: spookpin lintiq==0.1.3 uit requirements.txt verwijderd.
 
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.

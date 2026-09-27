@@ -303,7 +303,10 @@ async def bouwdepot_summary(hid: str, user: dict = Depends(get_current_user)):
         s = derive_invoice_status(i)
         if s == "telaat":
             overdue += 1
-        out.append({**i, "derived_status": s})
+        atts = i.get("attachments") or (
+            [{**i["attachment"], "id": i["attachment"].get("id", i["attachment"].get("path"))}]
+            if i.get("attachment") else [])
+        out.append({**i, "derived_status": s, "attachments": atts})
     return {"depots": summaries, "invoices": out, "bouwposten": bouwposten, "overdue_count": overdue}
 
 
@@ -316,26 +319,40 @@ async def upload_invoice_attachment(hid: str, invoice_id: str,
     if not inv:
         raise HTTPException(status_code=404, detail="Factuur/offerte niet gevonden")
     ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "bin"
-    path = f"{APP_NAME}/{hid}/{invoice_id}/{uuid.uuid4()}.{ext}"
+    att_id = uuid.uuid4().hex
+    path = f"{APP_NAME}/{hid}/{invoice_id}/{att_id}.{ext}"
     data = await file.read()
     ct = file.content_type or "application/octet-stream"
     res = await put_object(path, data, ct)
-    att = {"path": res["path"], "filename": file.filename or f"bijlage.{ext}", "content_type": ct}
-    await db.invoices.update_one({"invoice_id": invoice_id, "household_id": hid}, {"$set": {"attachment": att}})
+    att = {"id": att_id, "path": res["path"], "filename": file.filename or f"bijlage.{ext}", "content_type": ct}
+    await db.invoices.update_one({"invoice_id": invoice_id, "household_id": hid}, {"$push": {"attachments": att}})
     await log_change(hid, user, "bouwdepot", f"Bijlage toegevoegd aan '{inv.get('supplier', '?')}'")
     return att
 
 
-@api_router.get("/households/{hid}/invoices/{invoice_id}/attachment")
-async def get_invoice_attachment(hid: str, invoice_id: str, user: dict = Depends(get_current_user)):
+@api_router.get("/households/{hid}/invoices/{invoice_id}/attachment/{att_id}")
+async def get_invoice_attachment(hid: str, invoice_id: str, att_id: str,
+                                 user: dict = Depends(get_current_user)):
     await require_household(hid, user)
     inv = await db.invoices.find_one({"invoice_id": invoice_id, "household_id": hid}, {"_id": 0})
-    if not inv or not inv.get("attachment"):
+    if not inv:
+        raise HTTPException(status_code=404, detail="Niet gevonden")
+    atts = inv.get("attachments") or ([inv["attachment"]] if inv.get("attachment") else [])
+    att = next((a for a in atts if a.get("id") == att_id or a.get("path") == att_id), None)
+    if not att:
         raise HTTPException(status_code=404, detail="Geen bijlage")
-    att = inv["attachment"]
     data, ct = await get_object(att["path"])
     return Response(content=data, media_type=att.get("content_type", ct),
                     headers={"Content-Disposition": f'inline; filename="{att.get("filename", "offerte")}"'})
+
+
+@api_router.delete("/households/{hid}/invoices/{invoice_id}/attachment/{att_id}")
+async def delete_invoice_attachment(hid: str, invoice_id: str, att_id: str,
+                                    user: dict = Depends(get_current_user)):
+    await require_household(hid, user)
+    await db.invoices.update_one({"invoice_id": invoice_id, "household_id": hid},
+                                 {"$pull": {"attachments": {"id": att_id}}})
+    return {"ok": True}
 
 
 # ---------- projects & saving ----------

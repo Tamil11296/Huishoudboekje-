@@ -229,6 +229,7 @@ export const translations = {
     ai_suggested: "AI stelde voor",
     quick_presets: "Snelknoppen",
     funded_by: "Overschot van",
+    all: "Alle",
     st_betaald: "Betaald",
     st_ingediend: "Ingediend",
     st_ingepland: "Ingepland",
@@ -236,6 +237,7 @@ export const translations = {
     st_open: "Open",
     overdue_alert: "termijn(en) te laat — betaal of dien in bij de bank",
     attachment: "Bijlage (originele offerte)",
+    attachments: "Bijlagen",
     view_attachment: "Bekijk bijlage",
   },
   en: {
@@ -459,6 +461,7 @@ export const translations = {
     ai_suggested: "AI suggested",
     quick_presets: "Quick buttons",
     funded_by: "Funded by",
+    all: "All",
     st_betaald: "Paid",
     st_ingediend: "Submitted",
     st_ingepland: "Planned",
@@ -466,6 +469,7 @@ export const translations = {
     st_open: "Open",
     overdue_alert: "installment(s) overdue — pay or submit to the bank",
     attachment: "Attachment (original quote)",
+    attachments: "Attachments",
     view_attachment: "View attachment",
   },
 };

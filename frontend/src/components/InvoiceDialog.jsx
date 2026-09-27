@@ -25,13 +25,15 @@ function Sel({ value, onChange, options, testid }) {
   );
 }
 
-export default function InvoiceDialog({ open, onOpenChange, initial, offertes, postOpts, statuses, onSubmit, testid }) {
+export default function InvoiceDialog({ open, onOpenChange, initial, offertes, postOpts, statuses, onSubmit, testid, currentId, uploadAttachment, deleteAttachment, onChanged, apiBase }) {
   const { t } = useApp();
   const [v, setV] = useState({});
   const [busy, setBusy] = useState(false);
+  const [files, setFiles] = useState([]);
+  const [atts, setAtts] = useState([]);
 
   useEffect(() => {
-    if (open) setV({ type: "offerte", status: "ontvangen", submitted_to_bank: false, ...(initial || {}) });
+    if (open) { setV({ type: "offerte", status: "ontvangen", submitted_to_bank: false, ...(initial || {}) }); setFiles([]); setAtts(initial?.attachments || []); }
   }, [open, initial]);
 
   const set = (k, val) => setV((p) => ({ ...p, [k]: val }));
@@ -40,10 +42,22 @@ export default function InvoiceDialog({ open, onOpenChange, initial, offertes, p
     const q = offertes.find((o) => o.invoice_id === qid);
     setV((p) => ({ ...p, parent_quote_id: qid, bouwpost_id: q ? q.bouwpost_id : p.bouwpost_id, supplier: p.supplier || (q ? q.supplier : "") }));
   };
+  const removeExisting = async (attId) => {
+    if (initial?.invoice_id && deleteAttachment) await deleteAttachment(initial.invoice_id, attId);
+    setAtts((a) => a.filter((x) => x.id !== attId));
+  };
   const submit = async (e) => {
     e.preventDefault();
     setBusy(true);
-    try { await onSubmit(v); onOpenChange(false); } finally { setBusy(false); }
+    try {
+      const saved = await onSubmit(v);
+      const id = saved?.invoice_id || initial?.invoice_id;
+      if (id && files.length && uploadAttachment) {
+        for (const f of files) await uploadAttachment(id, f);
+        onChanged && onChanged();
+      }
+      onOpenChange(false);
+    } finally { setBusy(false); }
   };
 
   return (
@@ -100,6 +114,25 @@ export default function InvoiceDialog({ open, onOpenChange, initial, offertes, p
           )}
 
           <Field label={t("description")}><Input value={v.description || ""} onChange={(e) => set("description", e.target.value)} data-testid="field-description" /></Field>
+
+          <div className="space-y-2">
+            <Label>{t("attachments")}</Label>
+            {atts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between text-sm rounded-lg border border-border px-3 py-1.5" data-testid={`existing-att-${a.id}`}>
+                <a href={`${apiBase}/api/households/${currentId}/invoices/${initial?.invoice_id}/attachment/${a.id}`} target="_blank" rel="noreferrer" className="truncate text-emerald-700 dark:text-emerald-400 hover:underline">{a.filename}</a>
+                <button type="button" className="text-rose-600 shrink-0 ml-2" onClick={() => removeExisting(a.id)} data-testid={`del-att-${a.id}`}>✕</button>
+              </div>
+            ))}
+            {files.map((f, i) => (
+              <div key={i} className="flex items-center justify-between text-sm rounded-lg border border-dashed border-border px-3 py-1.5">
+                <span className="truncate text-muted-foreground">{f.name}</span>
+                <button type="button" className="text-rose-600 shrink-0 ml-2" onClick={() => setFiles((p) => p.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+            <Input type="file" accept=".pdf,image/*" multiple
+                   onChange={(e) => { setFiles((p) => [...p, ...Array.from(e.target.files || [])]); e.target.value = ""; }}
+                   data-testid="field-attachments" />
+          </div>
 
           <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>{t("cancel")}</Button>
