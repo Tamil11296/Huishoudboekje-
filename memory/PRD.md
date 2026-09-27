@@ -65,6 +65,13 @@ Responsive web app turning the "Budget_Bouwdepot" spreadsheet into a shared hous
   - **Instelbare snelknoppen**: quick-add presets komen uit household.quick_presets; klik op een chip opent een popover die om het bedrag vraagt (voorgevuld) + "Als standaard opslaan" (PATCH /households). Quick-add "Storting" schrijft nu naar /contribute (huidige maand).
   - Getest door testing agent (iteration_9): alle flows OK, geen bugs; FAB-overlap uit iteration_8 opgelost (right-24 vs right-6).
 
+- 2026-06 v12 (dashboard maand/jaar-redesign + inleg-keuze per potje):
+  - **Dashboard opgeschoond met 5 tabs** (Overzicht | Grafieken | Potjes | Per persoon | Maandtabel) om scrollen te beperken (design_guidelines.json via design-expert).
+  - **Maandweergave standaard** met maandpijlen (‹ ›) + `current-month-display` in de header, plus Maand/Jaar-toggle en jaar-selectie. KPI's en per-persoon-kaarten tonen de gekozen maand (maandweergave) of het hele jaar (jaarweergave). Maandtabel highlight de geselecteerde maand.
+  - **Hoofdgrafiek** heeft nu 3 staven per maand: Inkomsten, Lasten, en **Doelen & Sparen** (testid hernoemd naar `main-income-expense-chart`).
+  - **Inleg-bug fix + keuze**: bij een doel/potje kies je nu `Inleg bijhouden`: **Handmatig bevestigen** of **Automatisch berekenen** (`manual_contribution`). Handmatige potjes (ook mét gekoppelde categorie, bv. Boodschappen) tonen nu de knop "Bevestig inleg deze maand"; automatische potjes gebruiken de maandprojectie. calc: `compute_goals_summary` splitst per potje op `manual`; `contrib_by_month`/overschot-aftrek telt alleen handmatige potjes. Backend persisteert `manual_contribution`; confirm-all en cron-herinnering betreffen alleen handmatige potjes.
+  - Getest door testing agent (iteration_10): alle flows 100% OK, geen bugs.
+
 ## Backlog / remaining
 - P1: brute-force lockout on login; Pydantic validation on generic CRUD.
 - P2: recurring monthly AI email report; bank/PSD2 auto-import; streaming AI responses.

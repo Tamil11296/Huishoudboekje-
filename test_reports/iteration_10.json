@@ -1,0 +1,32 @@
+{
+  "summary": "Iteration 10 (frontend only). Full pass on the redesigned Dashboard + Goals contribution_mode bug fix. Login OK with cookie auth. Dashboard now has dashboard-tabs with 5 tabs (tab-overview/charts/potjes/split/table) - all visible. Header month stepper works: default month=September; month-next-btn advances to Oktober; iterating prev to Januari disables month-prev-btn; iterating next to December disables month-next-btn. View toggle: switching to view-mode-year hides the month stepper (month-prev-btn.visible=False) and KPI text changes vs month view (year totals). Charts tab: main-income-expense-chart renders with 3 legend items ['Doelen & Sparen','Inkomsten','Totale lasten'] - the requested 3rd bar is present. savings-chart + category-pie render. Per-person tab shows 2 per-person-split-cards. Maandtabel renders 12 month-row-* rows. BUG FIX verified end-to-end: created 'TEST_manual_i10' via dialog-goal with goal-mode-manual + cat-toggle-Hypotheek (linked category, manual mode). After save, confirm-inleg-btn-<pot_id> IS visible for the manual+category pot; opening popover, entering 2.22, submit triggers POST /api/households/{hid}/pots/{pot_id}/contribute -> 200 and UI flips goal-inleg-{pot_id} to 'Ingelegd deze maand: € 2'. Second goal 'TEST_auto_i10' created with goal-mode-auto - confirm-inleg-btn is NOT rendered for that pot (correct). No page errors. Only benign console warnings (recharts responsive container width -1 during tab mount, and missing DialogDescription aria warning).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Charts / Goals dialog", "issues": ["Benign recharts warning 'width(-1) and height(-1)' fires repeatedly during tab-content mount (ResponsiveContainer measures before parent has layout). Not user-visible but pollutes console. Consider giving the chart wrappers an explicit min-h or delaying mount until tab active.", "DialogContent for dialog-goal (and quick-add-dialog) is missing aria-describedby / <DialogDescription> - Radix warns. Purely a11y hygiene."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(cleanup) Two test goals were created via the UI and remain in the demo household: 'TEST_manual_i10' (pot_120932a8300142bf, target €100, manual, linked to Hypotheek, has a €2.22 confirmed contribution for 2026-09) and 'TEST_auto_i10' (pot_e82f1a67347f448f, target €200, auto). Main agent can delete these from Doelen & Sparen after review.",
+    "(nice-to-have) In month view, KPI text was identical when moving Sep -> Oct (Oct likely has no data yet in 2026-09 demo). Not a bug, just note: the month stepper is fully wired and 'current-month-display' updates; the highlighted row check via class-regex in the table was inconclusive but the row is rendered - main agent may want to confirm the highlight styling is visible.",
+    "(a11y) Add DialogDescription to dialog-goal and quick-add-dialog to silence Radix warning."
+  ],
+  "critical_code_review_comments": [
+    "Dashboard.jsx: 5-tab layout (dashboard-tabs) + month stepper + Maand/Jaar toggle correctly disables month-prev/next at Jan/Dec, and view=year hides the stepper. scope object drives KPIs/per-person cards for month vs year - verified year KPIs differ from any single month.",
+    "main-income-expense-chart now renders 3 dataKeys (Inkomsten, Totale lasten, Doelen & Sparen) - the new 'Doelen & Sparen' series is present in the legend.",
+    "Goals.jsx GoalDialog: manual/auto toggle (goal-mode-manual/auto) is wired to manual_contribution in the payload; default true. cat-toggle-* multi-select works, and creating a manual pot with a linked category correctly yields needs_contribution=true so ConfirmInleg popover renders.",
+    "POST /households/{hid}/pots/{pot_id}/contribute returns 200 and Goals.jsx re-fetches goals-summary, flipping goal-inleg-{pot_id} to the green 'Ingelegd deze maand' state (confirmed_this_month=true).",
+    "For auto pots, needs_contribution stays false so confirm-inleg-btn-{pot_id} is not rendered - correctly hidden per spec."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% of requested flows verified"},
+  "test_credentials": "robeson.constantine@gmail.com / Bouwdepot2026!",
+  "seed_data_creation": "Created via UI: pot 'TEST_manual_i10' (pot_120932a8300142bf, manual, linked to Hypotheek, target €100) with a €2.22 confirmed contribution for 2026-09; pot 'TEST_auto_i10' (pot_e82f1a67347f448f, auto, target €200). Both should be deleted before shipping.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 5 dashboard tabs (tab-overview/charts/potjes/split/table) and the month/year toggle + month stepper (month-prev-btn/current-month-display/month-next-btn/view-mode-month/view-mode-year/year-select) are in place and functional. The main chart testid is now 'main-income-expense-chart' (renamed from 'dashboard-chart'), and it has 3 series. contribution_mode bug is fully fixed: GoalDialog manual/auto toggle -> manual_contribution persists on pot; needs_contribution drives confirm-inleg-btn visibility; POST /contribute updates confirmed_this_month. Two TEST_ goals remain in the demo household for cleanup.",
+  "rca of the issue": "N/A - all requested features validated as working."
+}
