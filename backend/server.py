@@ -59,11 +59,15 @@ async def _run_pot_reminders():
         pots = await db.pots.find({"household_id": hh["household_id"]}, {"_id": 0}).to_list(200)
         unfunded = []
         for pot in pots:
-            if (pot.get("categories") or []) or float(pot.get("monthly_amount") or 0) <= 0:
+            monthly = float(pot.get("monthly_amount") or 0)
+            manual = pot.get("manual_contribution")
+            if manual is None:
+                manual = not (pot.get("categories") or [])
+            if not manual or monthly <= 0:
                 continue
             if float((pot.get("contributions") or {}).get(month) or 0) > 0.005:
                 continue
-            unfunded.append({"name": pot.get("name"), "amount": float(pot.get("monthly_amount") or 0)})
+            unfunded.append({"name": pot.get("name"), "amount": monthly})
         if not unfunded:
             continue
         html = pot_reminder_email_html(hh["name"], unfunded, FRONTEND_URL)
@@ -309,7 +313,7 @@ register_crud("invoices", "invoices", "invoice_id", "inv",
                "submitted_on", "paid_on", "description",
                "parent_quote_id", "termijn", "due_date", "paid_amount"])
 register_crud("pots", "pots", "pot_id", "pot",
-              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved", "priority", "funded_by"])
+              ["name", "monthly_amount", "categories", "note", "target_date", "already_saved", "priority", "funded_by", "manual_contribution"])
 register_crud("projects", "projects", "project_id", "proj",
               ["name", "target_date", "already_saved", "note"])
 register_crud("project-items", "project_items", "item_id", "pit",
@@ -542,7 +546,11 @@ async def pots_confirm_all(hid: str, body: dict = Body(default={}), user: dict =
     pots = await db.pots.find({"household_id": hid}, {"_id": 0}).to_list(200)
     n = 0
     for pot in pots:
-        if (pot.get("categories") or []) or float(pot.get("monthly_amount") or 0) <= 0:
+        monthly = float(pot.get("monthly_amount") or 0)
+        manual = pot.get("manual_contribution")
+        if manual is None:
+            manual = not (pot.get("categories") or [])
+        if not manual or monthly <= 0:
             continue
         if float((pot.get("contributions") or {}).get(month) or 0) > 0.005:
             continue

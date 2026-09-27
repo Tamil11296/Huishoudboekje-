@@ -373,6 +373,7 @@ function GoalDialog({ open, onClose, initial, cats, persons, onSubmit }) {
   const [priority, setPriority] = useState(initial?.priority ?? "");
   const [fundedBy, setFundedBy] = useState(initial?.funded_by || "joint");
   const [sel, setSel] = useState(initial?.categories || []);
+  const [manual, setManual] = useState(initial?.manual_contribution ?? true);
   const [busy, setBusy] = useState(false);
   const toggle = (c) => setSel((s) => (s.includes(c) ? s.filter((x) => x !== c) : [...s, c]));
   const submit = async (e) => {
@@ -383,7 +384,7 @@ function GoalDialog({ open, onClose, initial, cats, persons, onSubmit }) {
         name, monthly_amount: amount, categories: sel,
         target_date: targetDate || null, already_saved: alreadySaved === "" ? 0 : alreadySaved,
         priority: priority === "" ? null : Number(priority),
-        funded_by: fundedBy,
+        funded_by: fundedBy, manual_contribution: manual,
       });
     } finally { setBusy(false); }
   };
@@ -394,6 +395,22 @@ function GoalDialog({ open, onClose, initial, cats, persons, onSubmit }) {
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5"><Label>{t("goal_name")}</Label><Input value={name} onChange={(e) => setName(e.target.value)} required data-testid="field-goal-name" /></div>
           <div className="space-y-1.5"><Label>{t("monthly_deposit")}</Label><Input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} required data-testid="field-goal-amount" /></div>
+          <div className="space-y-1.5">
+            <Label>{t("contribution_mode")}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {[{ id: true, label: t("mode_manual") }, { id: false, label: t("mode_auto") }].map((o) => (
+                <button type="button" key={String(o.id)} onClick={() => setManual(o.id)} data-testid={`goal-mode-${o.id ? "manual" : "auto"}`}
+                  className={`px-3 py-2 rounded-lg text-sm border transition-colors ${
+                    manual === o.id
+                      ? "bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900"
+                      : "border-border text-muted-foreground hover:border-slate-400"
+                  }`}>
+                  {o.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">{manual ? t("mode_hint_manual") : t("mode_hint_auto")}</p>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5"><Label>{t("target_date")}</Label><Input type="date" value={targetDate} onChange={(e) => setTargetDate(e.target.value)} data-testid="field-goal-target" /></div>
             <div className="space-y-1.5"><Label>{t("already_saved")}</Label><Input type="number" step="0.01" value={alreadySaved} onChange={(e) => setAlreadySaved(e.target.value)} data-testid="field-goal-saved" /></div>

@@ -431,7 +431,9 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
         already = float(pot.get("already_saved") or 0)
         contributions = pot.get("contributions") or {}
         total_monthly += monthly
-        is_saving = not cats
+        manual = pot.get("manual_contribution")
+        if manual is None:
+            manual = not cats
         spent_ytd = 0.0
         spent_month = 0.0
         spent_by_month = {}
@@ -451,11 +453,12 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
                 mm = int(str(mk)[5:7])
                 val = float(mv or 0)
                 contrib_by_m[mm] = contrib_by_m.get(mm, 0) + val
-                contrib_by_month[mk] = round(contrib_by_month.get(mk, 0) + val, 2)
+                if manual:
+                    contrib_by_month[mk] = round(contrib_by_month.get(mk, 0) + val, 2)
         contrib_ytd = round(sum(v for m, v in contrib_by_m.items() if m <= months_elapsed), 2)
         contributed_this_month = round(contrib_by_m.get(current_month, 0), 2)
 
-        if is_saving:
+        if manual:
             allocated = contrib_ytd
             savings_planned_monthly += monthly
         else:
@@ -466,7 +469,7 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
         cum_s = 0.0
         for m in range(1, max(months_elapsed, 1) + 1):
             cum_s += spent_by_month.get(m, 0)
-            cum_c = (cum_c + contrib_by_m.get(m, 0)) if is_saving else (monthly * m)
+            cum_c = (cum_c + contrib_by_m.get(m, 0)) if manual else (monthly * m)
             history.append({"m": m, "balance": round(already + cum_c - cum_s, 2)})
         items = [i for i in project_items if i.get("project_id") == pot["pot_id"]]
         total_cost = round(sum(float(i.get("amount") or 0) for i in items), 2)
@@ -482,10 +485,11 @@ def compute_goals_summary(pots, project_items, variable_expenses, year,
             "completed": False, "date_passed": False,
             "priority": pot.get("priority"), "completed_at": pot.get("completed_at"),
             "funded_by": pot.get("funded_by") or "joint",
-            "is_saving": is_saving,
+            "is_saving": not cats,
+            "manual_contribution": manual,
             "contributed_this_month": contributed_this_month,
             "confirmed_this_month": contributed_this_month > 0.005,
-            "needs_contribution": is_saving and monthly > 0,
+            "needs_contribution": manual and monthly > 0,
         }
         if has_target:
             td = _parse(target_date)
