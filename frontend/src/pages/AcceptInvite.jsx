@@ -45,13 +45,23 @@ export default function AcceptInvite() {
           <Home className="h-6 w-6" />
         </span>
         <h1 className="font-heading text-2xl font-extrabold">{t("invite_title")}</h1>
-        {invite === false && <p className="mt-3 text-rose-600">Uitnodiging niet gevonden.</p>}
+        {invite === false && (
+          <>
+            <p className="mt-3 text-muted-foreground">Deze uitnodiging is al gebruikt of verlopen.</p>
+            {user && (
+              <Button className="w-full mt-6 rounded-full" onClick={() => navigate("/")}>Naar het dashboard</Button>
+            )}
+          </>
+        )}
         {invite && (
           <>
             <p className="mt-3 text-muted-foreground">
               {t("invite_by")} <strong>{invite.invited_by}</strong>
             </p>
             <p className="mt-1 text-lg font-semibold">{invite.household_name}</p>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Log in met het Google-account <strong>{invite.email}</strong>.
+            </p>
             <Button
               className="w-full mt-6 rounded-full"
               onClick={accept}

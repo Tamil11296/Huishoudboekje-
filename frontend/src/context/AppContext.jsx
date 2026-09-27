@@ -33,11 +33,14 @@ export function AppProvider({ children }) {
   }, []);
 
   const checkAuth = useCallback(async () => {
-    if (window.location.hash?.includes("session_id=")) {
-      return; // AuthCallback will handle
-    }
     try {
-      const { data } = await api.get("/auth/me");
+      let data;
+      try {
+        ({ data } = await api.get("/auth/me"));
+      } catch (e) {
+        if (e.response?.status !== 401) throw e;
+        ({ data } = await api.post("/auth/refresh")); // sessie stil verlengen
+      }
       setUser(data);
       await loadHouseholds();
     } catch {

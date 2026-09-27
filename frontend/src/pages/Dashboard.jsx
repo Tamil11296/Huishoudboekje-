@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   TrendingUp, TrendingDown, Wallet, PiggyBank, Receipt, ArrowUpRight,
-  Sparkles, AlertTriangle, Coins, Zap, Plus,
+  AlertTriangle, Coins, Zap, Plus,
   ChevronLeft, ChevronRight, LayoutDashboard, BarChart3, Users, Table as TableIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -64,8 +64,6 @@ export default function Dashboard() {
   const { t, currentId, currentHousehold } = useApp();
   const [data, setData] = useState(null);
   const [year, setYear] = useState(currentHousehold?.dashboard_year || new Date().getFullYear());
-  const [insights, setInsights] = useState(null);
-  const [insLoading, setInsLoading] = useState(false);
   const [selectedCat, setSelectedCat] = useState(null);
   const [pots, setGoals] = useState(null);
   const [view, setView] = useState("month");
@@ -221,31 +219,6 @@ export default function Dashboard() {
                  tone={scope.savings_rate >= 0 ? "pos" : "neg"} />
           </div>
 
-          <Card className="p-6" data-testid="ai-insights-card">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-heading text-lg font-semibold flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-slate-400" /> {t("ai_insights")}
-              </h2>
-              <Button size="sm" variant="outline" className="gap-1" disabled={insLoading} data-testid="generate-insights-btn"
-                onClick={async () => {
-                  setInsLoading(true);
-                  try {
-                    const { data } = await api.post(`/households/${currentId}/ai/insights`);
-                    setInsights(data.tips);
-                  } finally { setInsLoading(false); }
-                }}>
-                <Sparkles className="h-4 w-4" /> {insLoading ? t("ai_thinking") : t("ai_insights")}
-              </Button>
-            </div>
-            {!insights && !insLoading && <p className="text-sm text-muted-foreground">{t("ai_intro")}</p>}
-            <ul className="space-y-2">
-              {(insights || []).map((tip, i) => (
-                <li key={i} className="flex gap-2 text-sm" data-testid={`insight-${i}`}>
-                  <span className="text-emerald-600 font-bold">•</span><span>{tip}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
         </TabsContent>
 
         <TabsContent value="charts" className="space-y-6 mt-6">
@@ -560,7 +533,6 @@ function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
   const [month, setMonth] = useState(defaultMonth);
   const [paidBy, setPaidBy] = useState("joint");
   const [busy, setBusy] = useState(false);
-  const [suggesting, setSuggesting] = useState(false);
   const known = cats.filter((c) => PRESET_AMTS[c]);
   const rest = cats.filter((c) => !PRESET_AMTS[c]);
   const stored = currentHousehold?.quick_presets;
@@ -588,17 +560,6 @@ function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
     try { await api.patch(`/households/${currentId}`, { quick_presets: base }); await loadHouseholds(); toast.success(t("saved")); }
     catch (e) { toast.error(apiErr(e)); }
   };
-  const suggest = async () => {
-    if (!desc || category) return;
-    setSuggesting(true);
-    try {
-      const { data } = await api.post(`/households/${currentId}/ai/categorize`,
-        { description: desc, amount: amount ? Number(amount) : undefined });
-      if (data.category && cats.includes(data.category)) {
-        setCategory(data.category); toast.success(`${t("ai_suggested")}: ${data.category}`);
-      }
-    } catch (e) { /* silent */ } finally { setSuggesting(false); }
-  };
   return (
     <div className="space-y-4">
       <div className="space-y-1.5">
@@ -616,14 +577,8 @@ function VariableForm({ currentId, cats, persons, defaultMonth, onDone }) {
       </div>
       <div className="space-y-1.5">
         <Label>{t("description")}</Label>
-        <div className="relative">
-          <Input placeholder={t("description")} value={desc} onBlur={suggest}
-                 onChange={(e) => setDesc(e.target.value)} className="pr-9" data-testid="quick-expense-desc" />
-          <button type="button" onClick={suggest} disabled={suggesting || !desc} title={t("ai_suggested")}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-500 disabled:opacity-40" data-testid="quick-expense-ai">
-            <Sparkles className="h-4 w-4" />
-          </button>
-        </div>
+        <Input placeholder={t("description")} value={desc}
+               onChange={(e) => setDesc(e.target.value)} data-testid="quick-expense-desc" />
       </div>
       <div className="space-y-1.5">
         <Label>{t("paid_by")}</Label>

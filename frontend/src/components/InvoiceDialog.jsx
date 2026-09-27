@@ -38,7 +38,9 @@ export default function InvoiceDialog({ open, onOpenChange, initial, offertes, p
 
   const set = (k, val) => setV((p) => ({ ...p, [k]: val }));
   const isFactuur = v.type === "factuur";
+  const NONE = "__none__";
   const onParent = (qid) => {
+    if (qid === NONE) { setV((p) => ({ ...p, parent_quote_id: null })); return; }
     const q = offertes.find((o) => o.invoice_id === qid);
     setV((p) => ({ ...p, parent_quote_id: qid, bouwpost_id: q ? q.bouwpost_id : p.bouwpost_id, supplier: p.supplier || (q ? q.supplier : "") }));
   };
@@ -92,8 +94,14 @@ export default function InvoiceDialog({ open, onOpenChange, initial, offertes, p
           {isFactuur && (
             <>
               <Field label={t("parent_quote")}>
-                <Sel value={v.parent_quote_id} onChange={onParent} options={offertes.map((o) => ({ value: o.invoice_id, label: o.supplier }))} testid="field-parent_quote_id" />
+                <Sel value={v.parent_quote_id || NONE} onChange={onParent}
+                     options={[{ value: NONE, label: "Geen offerte (losse factuur/bon)" },
+                               ...offertes.map((o) => ({ value: o.invoice_id, label: o.supplier }))]}
+                     testid="field-parent_quote_id" />
               </Field>
+              {!v.parent_quote_id && (
+                <Field label={t("bouwposten")}><Sel value={v.bouwpost_id} onChange={(x) => set("bouwpost_id", x)} options={postOpts} testid="field-invoice-bouwpost_id" /></Field>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 <Field label={t("termijn")}><Input value={v.termijn || ""} onChange={(e) => set("termijn", e.target.value)} placeholder="1" data-testid="field-termijn" /></Field>
                 <Field label={t("due_date")}><Input type="date" value={v.due_date || ""} onChange={(e) => set("due_date", e.target.value)} data-testid="field-due_date" /></Field>

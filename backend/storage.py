@@ -1,47 +1,34 @@
-import os
-import logging
-import httpx
+"""Bijlagen (offertes, facturen, bonnen) opgeslagen in MongoDB zelf.
+Geen externe opslagdienst nodig; maximaal 10 MB per bestand (MongoDB-limiet is 16 MB)."""
+from datetime import datetime, timezone
+import uuid
 
-logger = logging.getLogger(__name__)
+from bson import Binary
 
-STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
-STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
-EMERGENT_KEY = os.environ.get("EMERGENT_LLM_KEY")
-APP_NAME = "huishoudbudget"
+from deps import db
 
-_key = None
-
-
-async def _init(force: bool = False):
-    global _key
-    if _key and not force:
-        return _key
-    async with httpx.AsyncClient(timeout=30) as c:
-        r = await c.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_KEY})
-        r.raise_for_status()
-        _key = r.json()["storage_key"]
-    return _key
+MAX_BYTES = 10 * 1024 * 1024
+ALLOWED_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
 
 
-async def put_object(path: str, data: bytes, content_type: str) -> dict:
-    key = await _init()
-    async with httpx.AsyncClient(timeout=120) as c:
-        url = f"{STORAGE_URL}/objects/{path}"
-        r = await c.put(url, headers={"X-Storage-Key": key, "Content-Type": content_type}, content=data)
-        if r.status_code == 404:
-            key = await _init(force=True)
-            r = await c.put(url, headers={"X-Storage-Key": key, "Content-Type": content_type}, content=data)
-        r.raise_for_status()
-        return r.json()
+async def put_object(household_id: str, invoice_id: str, filename: str, content_type: str, data: bytes) -> str:
+    att_id = uuid.uuid4().hex
+    await db.attachments.insert_one({
+        "att_id": att_id, "household_id": household_id, "invoice_id": invoice_id,
+        "filename": filename[:200], "content_type": content_type, "size": len(data),
+        "data": Binary(data), "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return att_id
 
 
-async def get_object(path: str):
-    key = await _init()
-    async with httpx.AsyncClient(timeout=60) as c:
-        url = f"{STORAGE_URL}/objects/{path}"
-        r = await c.get(url, headers={"X-Storage-Key": key})
-        if r.status_code == 404:
-            key = await _init(force=True)
-            r = await c.get(url, headers={"X-Storage-Key": key})
-        r.raise_for_status()
-        return r.content, r.headers.get("Content-Type", "application/octet-stream")
+async def get_object(household_id: str, invoice_id: str, att_id: str):
+    doc = await db.attachments.find_one({"att_id": att_id, "household_id": household_id,
+                                         "invoice_id": invoice_id}, {"_id": 0})
+    if not doc:
+        return None
+    return {"filename": doc["filename"], "content_type": doc["content_type"], "data": bytes(doc["data"])}
+
+
+async def delete_object(household_id: str, invoice_id: str, att_id: str):
+    await db.attachments.delete_one({"att_id": att_id, "household_id": household_id,
+                                     "invoice_id": invoice_id})

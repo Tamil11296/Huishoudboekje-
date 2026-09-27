@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
-import { UserPlus, Trash2, Plus, Copy, X, Crown, User, FileText, FileSpreadsheet } from "lucide-react";
+import { UserPlus, Trash2, Plus, Copy, X, Crown, User, FileText, FileSpreadsheet, Download, Upload } from "lucide-react";
 import api, { downloadFile } from "@/lib/api";
 import { apiErr } from "@/lib/format";
 import { useApp } from "@/context/AppContext";
@@ -219,6 +219,38 @@ export default function Settings() {
                   onClick={() => downloadFile(`/households/${currentId}/export/excel`, `${currentHousehold?.name || "overzicht"}.xlsx`)}>
             <FileSpreadsheet className="h-4 w-4" /> Excel
           </Button>
+        </div>
+        <div className="border-t border-border pt-4 space-y-2">
+          <h3 className="font-semibold text-sm">Back-up</h3>
+          <p className="text-xs text-muted-foreground">
+            Download maandelijks een volledige back-up (zonder bijlagen). Terugzetten vervangt alle huidige gegevens.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="gap-1" data-testid="backup-btn"
+                    onClick={() => downloadFile(`/households/${currentId}/backup`, `backup-${new Date().toISOString().slice(0, 10)}.json`)}>
+              <Download className="h-4 w-4" /> Back-up downloaden
+            </Button>
+            {isOwner && (
+              <label className="inline-flex">
+                <input type="file" accept="application/json" className="hidden" data-testid="restore-input"
+                       onChange={async (e) => {
+                         const f = e.target.files?.[0];
+                         e.target.value = "";
+                         if (!f) return;
+                         if (!window.confirm("Alle huidige gegevens worden vervangen door de back-up. Doorgaan?")) return;
+                         try {
+                           const json = JSON.parse(await f.text());
+                           const { data } = await api.post(`/households/${currentId}/restore`, json);
+                           toast.success(`Back-up teruggezet (${Object.values(data.counts).reduce((a, b) => a + b, 0)} regels)`);
+                           await loadHouseholds();
+                         } catch (err) { toast.error(apiErr(err)); }
+                       }} />
+                <span className="inline-flex items-center gap-1 h-9 px-4 rounded-md border border-input text-sm font-medium cursor-pointer hover:bg-accent">
+                  <Upload className="h-4 w-4" /> Back-up terugzetten
+                </span>
+              </label>
+            )}
+          </div>
         </div>
       </Card>
 

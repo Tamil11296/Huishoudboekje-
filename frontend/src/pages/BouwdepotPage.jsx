@@ -77,7 +77,7 @@ export default function BouwdepotPage() {
     return m;
   }, [invoices]);
 
-  const API = process.env.REACT_APP_BACKEND_URL;
+  const API = process.env.REACT_APP_BACKEND_URL || "";
   const fileRef = useRef();
   const [upTarget, setUpTarget] = useState(null);
   const pickFile = (id) => { setUpTarget(id); setTimeout(() => fileRef.current?.click(), 0); };

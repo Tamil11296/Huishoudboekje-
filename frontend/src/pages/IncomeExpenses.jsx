@@ -107,17 +107,6 @@ export default function IncomeExpenses() {
 
   const openDialog = (kind, initial = null) => setDialog({ kind, initial });
 
-  const suggestCategory = async (values) => {
-    if (!values.description) return null;
-    try {
-      const { data } = await api.post(`/households/${currentId}/ai/categorize`,
-        { description: values.description, amount: values.amount });
-      const opts = (cats.expense || []);
-      if (data.category && opts.includes(data.category)) return { category: data.category };
-    } catch (e) { toast.error(apiErr(e)); }
-    return null;
-  };
-
   return (
     <div className="space-y-6">
       <h1 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tight">{t("nav_income")}</h1>
@@ -213,7 +202,6 @@ export default function IncomeExpenses() {
           initial={dialog.initial}
           onSubmit={(v) => save(dialog.kind, v)}
           testid={`dialog-${dialog.kind}`}
-          suggest={dialog.kind === "variable" ? suggestCategory : undefined}
         />
       )}
     </div>

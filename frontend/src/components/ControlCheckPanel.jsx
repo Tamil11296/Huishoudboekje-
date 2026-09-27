@@ -17,7 +17,7 @@ export default function ControlCheckPanel({ checks = [], reconciled = true }) {
           {reconciled ? <CheckCircle2 className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
           {reconciled ? t("reconciled") : t("has_warnings")}
         </span>
-        <span>{t("control_check")}</span>
+        <span className="hidden sm:inline">{t("control_check")}</span>
       </div>
       {checks.map((c, i) => (
         <div

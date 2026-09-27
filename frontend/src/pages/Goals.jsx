@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Coins, Target, CalendarClock, CheckCircle2, AlertTriangle,
-  Wand2, Sparkles, PartyPopper, Flag, Trophy,
+  Wand2, PartyPopper, Flag, Trophy,
 } from "lucide-react";
 import api from "@/lib/api";
 import { eur, apiErr } from "@/lib/format";
@@ -26,8 +26,6 @@ export default function Goals() {
   const [summary, setSummary] = useState(null);
   const [dialog, setDialog] = useState(null);
   const [itemDialog, setItemDialog] = useState(null);
-  const [tips, setTips] = useState({});
-  const [tipBusy, setTipBusy] = useState(null);
   const [preview, setPreview] = useState(null);
   const cats = currentHousehold?.categories?.expense || [];
 
@@ -65,12 +63,6 @@ export default function Goals() {
   const applyDistribute = async () => {
     try { await api.post(`/households/${currentId}/goals/distribute?apply=true`); toast.success(t("auto_distribute")); setPreview(null); load(); }
     catch (e) { toast.error(apiErr(e)); }
-  };
-  const getTip = async (id) => {
-    setTipBusy(id);
-    try { const { data } = await api.post(`/households/${currentId}/goals/${id}/tip`); setTips((p) => ({ ...p, [id]: data.tip })); }
-    catch (e) { toast.error(apiErr(e)); }
-    finally { setTipBusy(null); }
   };
   const confirmOne = async (potId, amount, month) => {
     try { await api.post(`/households/${currentId}/pots/${potId}/contribute`, { amount, month }); toast.success(t("deposit_done")); load(); }
@@ -159,18 +151,7 @@ export default function Goals() {
                       <PartyPopper className="h-3 w-3" /> {t("goal_completed")}
                     </Badge>
                   )}
-                  {g.has_target && (
-                    <Button size="sm" variant="outline" className="h-7 gap-1 rounded-full text-xs ml-auto" disabled={tipBusy === g.pot_id}
-                      onClick={() => getTip(g.pot_id)} data-testid={`goal-tip-btn-${g.pot_id}`}>
-                      <Sparkles className="h-3 w-3" /> {tipBusy === g.pot_id ? t("ai_thinking") : t("ai_tip")}
-                    </Button>
-                  )}
                 </div>
-                {tips[g.pot_id] && (
-                  <div className="text-xs rounded-lg bg-slate-50 dark:bg-slate-800/50 p-2.5 flex gap-2" data-testid={`goal-tip-${g.pot_id}`}>
-                    <Sparkles className="h-3.5 w-3.5 text-emerald-600 shrink-0 mt-0.5" /> <span>{tips[g.pot_id]}</span>
-                  </div>
-                )}
 
                 <div className="text-center py-1">
                   <div className="text-xs uppercase tracking-wider text-slate-500 font-semibold">{t("pot_balance")}</div>

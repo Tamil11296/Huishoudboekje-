@@ -4,7 +4,6 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-route
 import { Toaster } from "sonner";
 import { AppProvider, useApp } from "@/context/AppContext";
 import Login from "@/pages/Login";
-import AuthCallback from "@/pages/AuthCallback";
 import AcceptInvite from "@/pages/AcceptInvite";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
@@ -13,7 +12,6 @@ import BouwdepotPage from "@/pages/BouwdepotPage";
 import Goals from "@/pages/Goals";
 import Settings from "@/pages/Settings";
 import Header from "@/components/Header";
-import AiAssistant from "@/components/AiAssistant";
 
 function Protected({ children }) {
   const { user } = useApp();
@@ -43,17 +41,14 @@ function Shell({ children }) {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full flex-1">
         {children}
       </main>
-      <AiAssistant />
       <footer className="border-t border-border py-6 text-center text-xs text-muted-foreground">
-        Huishoudbudget & Bouwdepot · EUR · gemaakt voor gedeelde huishoudens
+        Huishoudboekje · EUR
       </footer>
     </div>
   );
 }
 
 function AppRouter() {
-  const location = useLocation();
-  if (location.hash?.includes("session_id=")) return <AuthCallback />;
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

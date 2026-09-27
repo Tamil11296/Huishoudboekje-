@@ -9,10 +9,15 @@ from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
-EMAIL_BASE_URL = "https://integrations.emergentagent.com"
-EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
-EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Huishoudbudget & Bouwdepot")
+# Optioneel: e-mail via Resend (resend.com). Zonder sleutel toont de app de uitnodigingslink
+# om zelf te delen (bijv. via WhatsApp).
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "")  # bijv. "Huishoudboekje <noreply@jouwdomein.nl>"
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
+
+
+def email_enabled() -> bool:
+    return bool(RESEND_API_KEY and EMAIL_FROM)
 
 _SHORTENERS = ("bit.ly", "tinyurl.com", "t.co", "is.gd", "cutt.ly", "goo.gl", "rebrand.ly")
 _CRED_ASK = ("reply with your password", "reply with the code", "send your password", "cvv",
@@ -88,47 +93,21 @@ def _assert_safe_email(subject: str, html: str) -> None:
 
 
 async def send_email(*, to: str, subject: str, html: str) -> str | None:
+    if not email_enabled():
+        return None
     _assert_safe_email(subject, html)
-    payload = {"to": [to], "subject": subject, "html": html, "from_name": EMAIL_FROM_NAME}
+    payload = {"from": EMAIL_FROM, "to": [to], "subject": subject, "html": html}
     if EMAIL_REPLY_TO:
-        payload["contact_email"] = EMAIL_REPLY_TO
+        payload["reply_to"] = EMAIL_REPLY_TO
     try:
         async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
-                                     headers={"X-Email-Key": EMAIL_KEY}, json=payload)
+            resp = await client.post("https://api.resend.com/emails",
+                                     headers={"Authorization": f"Bearer {RESEND_API_KEY}"}, json=payload)
         resp.raise_for_status()
         return resp.json().get("id")
     except Exception as e:
         logger.error(f"Email send error: {str(e)}")
         return None
-
-
-def pot_reminder_email_html(household_name: str, pots: list, app_url: str) -> str:
-    rows = "".join(
-        f'<tr><td style="padding:6px 0;color:#334155">{escape(p["name"])}</td>'
-        f'<td style="padding:6px 0;text-align:right;color:#0f172a;font-weight:bold">&euro;{p["amount"]:.0f}/mnd</td></tr>'
-        for p in pots
-    )
-    link = f'{app_url}/doelen' if app_url else ''
-    btn = (f'<p style="margin:28px 0"><a href="{escape(link)}" '
-           f'style="background:#0f172a;color:#ffffff;padding:12px 24px;border-radius:9999px;'
-           f'text-decoration:none;font-weight:bold">Inleg bevestigen</a></p>') if link else ''
-    return (
-        f'<table role="presentation" width="100%" style="background:#f8fafc;padding:24px">'
-        f'<tr><td align="center"><table role="presentation" width="520" '
-        f'style="background:#ffffff;border-radius:12px;font-family:Arial,sans-serif;'
-        f'border:1px solid #e2e8f0"><tr><td style="padding:32px">'
-        f'<p style="font-size:20px;font-weight:bold;color:#0f172a;margin:0 0 16px">'
-        f'Huishoudbudget &amp; Bouwdepot</p>'
-        f'<p style="color:#334155">Voor huishouden <strong>{escape(household_name)}</strong> is deze maand '
-        f'nog geen inleg bevestigd voor de volgende doelen &amp; sparen potjes:</p>'
-        f'<table role="presentation" width="100%" style="border-collapse:collapse;margin:12px 0">{rows}</table>'
-        f'<p style="color:#334155">Zet je het geld deze maand opzij? Bevestig het dan even in de app.</p>'
-        f'{btn}'
-        f'<p style="font-size:12px;color:#94a3b8">Je ontvangt deze herinnering omdat er nog openstaande '
-        f'potjes zijn. We vragen je nooit om je wachtwoord per e-mail.</p>'
-        f'</td></tr></table></td></tr></table>'
-    )
 
 
 def invite_email_html(inviter_name: str, household_name: str, invite_link: str) -> str:
@@ -138,7 +117,7 @@ def invite_email_html(inviter_name: str, household_name: str, invite_link: str) 
         f'style="background:#ffffff;border-radius:12px;font-family:Arial,sans-serif;'
         f'border:1px solid #e2e8f0"><tr><td style="padding:32px">'
         f'<p style="font-size:20px;font-weight:bold;color:#0f172a;margin:0 0 16px">'
-        f'Huishoudbudget &amp; Bouwdepot</p>'
+        f'Huishoudboekje</p>'
         f'<p style="color:#334155">{escape(inviter_name)} nodigt je uit om samen te werken aan '
         f'het huishouden <strong>{escape(household_name)}</strong>.</p>'
         f'<p style="color:#334155">Klik op de knop hieronder om de uitnodiging te accepteren en '
@@ -148,6 +127,6 @@ def invite_email_html(inviter_name: str, household_name: str, invite_link: str) 
         f'text-decoration:none;font-weight:bold">Uitnodiging accepteren</a></p>'
         f'<p style="font-size:12px;color:#94a3b8">Verwachtte je deze e-mail niet? Dan kun je hem '
         f'negeren. We vragen je nooit om je wachtwoord per e-mail.</p>'
-        f'<p style="font-size:12px;color:#94a3b8">Verzonden door Huishoudbudget &amp; Bouwdepot.</p>'
+        f'<p style="font-size:12px;color:#94a3b8">Verzonden door Huishoudboekje.</p>'
         f'</td></tr></table></td></tr></table>'
     )

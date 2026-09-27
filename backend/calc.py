@@ -1,4 +1,5 @@
 """Pure calculation helpers for budget projections, per-person split and bouwdepot rollups."""
+import calendar
 from datetime import date, datetime, timezone
 
 MONTHS_NL = ["", "Januari", "Februari", "Maart", "April", "Mei", "Juni",
@@ -23,7 +24,7 @@ def month_amount(entry: dict, year: int, month: int) -> float:
     start = _parse(entry.get("start_date"))
     end = _parse(entry.get("end_date"))
     m_start = date(year, month, 1)
-    m_end = date(year, month, 28)
+    m_end = date(year, month, calendar.monthrange(year, month)[1])
 
     if start and start > m_end:
         return 0.0
@@ -197,15 +198,21 @@ def compute_dashboard(household, incomes, fixed_expenses, variable_expenses, yea
 
 def compute_bouwpost_rollup(bp, invoices):
     rows = [i for i in invoices if i.get("bouwpost_id") == bp["bouwpost_id"]]
-    accepted_quotes = sum(float(i.get("amount_incl_vat") or 0) for i in rows
-                          if i.get("type") == "offerte" and i.get("status") == "geaccepteerd")
+    accepted = [i for i in rows if i.get("type") == "offerte" and i.get("status") == "geaccepteerd"]
+    accepted_quotes = sum(float(i.get("amount_incl_vat") or 0) for i in accepted)
     invoiced = sum(float(i.get("invoice_amount") or 0) for i in rows if i.get("invoice_amount"))
     paid = sum(float(i.get("paid_amount") or i.get("invoice_amount") or 0) for i in rows if i.get("paid_on"))
     budget = float(bp.get("budget") or 0)
-    still_to_invoice = max(accepted_quotes - invoiced, 0)
+    # Per geaccepteerde offerte: wat er nog gefactureerd gaat worden. Alleen facturen die bij
+    # die offerte horen (termijnen of een bedrag op de offerteregel zelf) tellen daarvoor mee;
+    # losse bonnen verlagen een offerte niet.
+    by_quote = {}
+    for i in invoices:
+        if i.get("type") == "factuur" and i.get("parent_quote_id"):
+            by_quote[i["parent_quote_id"]] = by_quote.get(i["parent_quote_id"], 0) + float(i.get("invoice_amount") or 0)
+    still_to_invoice = sum(max(float(q.get("amount_incl_vat") or 0) - float(q.get("invoice_amount") or 0)
+                               - by_quote.get(q["invoice_id"], 0), 0) for q in accepted)
     commitment = invoiced + still_to_invoice
-    if commitment < accepted_quotes:
-        commitment = accepted_quotes
     return {
         **{k: bp[k] for k in ("bouwpost_id", "name", "category", "bouwdepot_id") if k in bp},
         "budget": round(budget, 2),
@@ -227,25 +234,35 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
 
     posts = [compute_bouwpost_rollup(bp, depot_invoices) for bp in bouwposten
              if bp.get("bouwdepot_id") == depot["bouwdepot_id"]]
-    # still to submit = accepted work not yet invoiced/submitted.
-    # Subtract child term-invoices already submitted/paid so their amount is not
-    # double-counted (once here via the quote, once via submitted_not_paid/paid_out).
+    # Wat van een factuur(termijn) al bij de bank ligt: betaald of ingediend.
+    def _committed(i):
+        if i.get("paid_on"):
+            return float(i.get("paid_amount") or i.get("invoice_amount") or 0)
+        if i.get("submitted_to_bank"):
+            return float(i.get("invoice_amount") or 0)
+        return 0.0
+
+    # Termijnfacturen die aan een offerte hangen, tellen per offerte.
     child_committed = {}
     for i in depot_invoices:
         if i.get("type") == "factuur" and i.get("parent_quote_id"):
-            if i.get("paid_on"):
-                amt = float(i.get("paid_amount") or i.get("invoice_amount") or 0)
-            elif i.get("submitted_to_bank"):
-                amt = float(i.get("invoice_amount") or 0)
-            else:
-                amt = 0.0
-            child_committed[i["parent_quote_id"]] = child_committed.get(i["parent_quote_id"], 0) + amt
+            child_committed[i["parent_quote_id"]] = child_committed.get(i["parent_quote_id"], 0) + _committed(i)
 
+    # Nog in te dienen van geaccepteerde offertes = offertebedrag min wat er al (via termijnen
+    # of via een bedrag op de offerteregel zelf) is ingediend of betaald.
     still_to_submit = 0.0
     for i in depot_invoices:
-        if i.get("type") == "offerte" and i.get("status") == "geaccepteerd" and not i.get("invoice_amount"):
-            remaining = float(i.get("amount_incl_vat") or 0) - child_committed.get(i["invoice_id"], 0)
+        if i.get("type") == "offerte" and i.get("status") == "geaccepteerd":
+            remaining = (float(i.get("amount_incl_vat") or 0)
+                         - child_committed.get(i["invoice_id"], 0) - _committed(i))
             still_to_submit += max(remaining, 0)
+
+    # Losse facturen/bonnen zonder offerte die nog niet zijn ingediend.
+    quote_ids = {i["invoice_id"] for i in depot_invoices if i.get("type") == "offerte"}
+    loose_to_submit = sum(float(i.get("invoice_amount") or 0) for i in depot_invoices
+                          if i.get("type") == "factuur" and i.get("parent_quote_id") not in quote_ids
+                          and not i.get("paid_on") and not i.get("submitted_to_bank"))
+    still_to_submit += loose_to_submit
 
     balance_after_pending = start - paid_out - submitted_not_paid
     freely_available = balance_after_pending - still_to_submit
@@ -292,7 +309,14 @@ def compute_bouwdepot_summary(depot, bouwposten, invoices):
                 checks.append({"level": "warning", "code": "termijn_due",
                                "message": f"Termijn van '{i.get('supplier', '?')}' vervalt over {days} dagen."})
 
-    controle = round(start - paid_out - submitted_not_paid - still_to_submit - freely_available, 2)
+    # Controle: verplichtingen per bouwpost opgeteld moeten gelijk zijn aan wat het depot
+    # als uitbetaald + ingediend + nog in te dienen ziet. Een verschil betekent een factuur
+    # zonder (geldige) bouwpost, of een betaald bedrag dat afwijkt van het factuurbedrag.
+    depot_total = paid_out + submitted_not_paid + still_to_submit
+    controle = round(sum(p["commitment"] for p in posts) - depot_total, 2)
+    if abs(controle) >= 0.01:
+        checks.append({"level": "error", "code": "controle_mismatch",
+                       "message": f"Controle wijkt €{controle} af: bouwposten en depot sluiten niet op elkaar aan."})
     timeline = _build_timeline(depot, depot_invoices, start, paid_out,
                                submitted_not_paid, still_to_submit)
 
