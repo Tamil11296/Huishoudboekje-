@@ -1,149 +1,154 @@
 # Huishoudboekje
 
-Budget en bouwdepot voor ons huishouden. Inloggen met Google; alleen wie op de toegangslijst
-staat of een uitnodiging heeft, komt erin.
+Budget en bouwdepot voor ons huishouden. Een React-app die zonder eigen server draait:
 
-- **Frontend:** React (in `frontend/`)
-- **Backend:** FastAPI + MongoDB (in `backend/`)
-- **Hosting:** één container (Google Cloud Run) + MongoDB Atlas (gratis M0-cluster)
+- **Firebase Authentication:** inloggen met Google.
+- **Cloud Firestore:** gedeelde database, beveiligd met `firestore.rules`.
+- **Firebase Hosting:** de app zelf, met https en een eigen adres.
+- **Later:** als app in de Google Play Store (stap 6).
 
-Geen Emergent, geen AI, geen tracking.
+Alles valt binnen het gratis Firebase-abonnement (Spark). Je hebt geen creditcard of
+factureringsaccount nodig.
 
----
-
-## Eerst bekijken: demo in je browser (geen accounts nodig)
-
-1. Op GitHub: **Code → Codespaces → Create codespace on main**.
-2. Wacht een paar minuten; de app wordt gebouwd en opent vanzelf in een nieuw tabblad
-   (anders: tabblad **Ports** → poort 8000 → wereldbolletje).
-3. Klik **Inloggen als Robeson** of **Inloggen als Miraja**.
-
-De demo gebruikt onze cijfers uit Excel v5 in een tijdelijke database in het geheugen; wijzigingen
-verdwijnen bij herstarten. Stop de codespace als je klaar bent (**Codespaces → … → Stop**), dan
-telt hij niet mee in je gratis uren. De demo zit niet in de echte app.
-
----
-
-## In gebruik nemen (eenmalig, ±45 minuten)
-
-Je maakt drie accounts/onderdelen aan. Alle geheime waarden zet je bij Cloud Run, **nooit in de code**.
-
-### 1. Database: MongoDB Atlas
-
-1. Ga naar <https://cloud.mongodb.com> en log in met je Google-account.
-2. **Create** → kies **M0 (Free)**, provider **Google Cloud** of **AWS**, regio **Europa** (bijv. Frankfurt of Belgium).
-3. **Database Access** → *Add new database user* → gebruikersnaam + sterk wachtwoord (bewaar dit in je wachtwoordmanager).
-4. **Network Access** → *Add IP address* → `0.0.0.0/0`.
-   Cloud Run heeft geen vast IP-adres; de database is beveiligd met gebruikersnaam en wachtwoord.
-5. **Database** → **Connect** → **Drivers** → kopieer de verbindingsregel (`mongodb+srv://...`) en vul je wachtwoord in.
-   Dit is `MONGO_URL`.
-
-### 2. Google Cloud: project, Google-login en hosting
-
-1. Ga naar <https://console.cloud.google.com> → nieuw project, bijv. `huishoudboekje`.
-2. Koppel een **factureringsaccount** (verplicht voor Cloud Run). Voor twee gebruikers blijf je
-   vrijwel zeker binnen het gratis gebruik. Stel voor de zekerheid een **budgetmelding** in (bijv. € 5).
-3. **APIs & Services → OAuth consent screen**
-   - User type: **External**, app-naam `Huishoudboekje`, jouw e-mail als support/contact.
-   - Laat de app in **Testing** staan en voeg bij **Test users** jouw Gmail en die van je vrouw toe.
-4. Deploy eerst de app (stap 3 hieronder), zodat je het adres kent. Daarna:
-   **APIs & Services → Credentials → Create credentials → OAuth client ID**
-   - Type: **Web application**
-   - **Authorized JavaScript origins:** het Cloud Run-adres, bijv. `https://huishoudboekje-xxxxx.europe-west4.run.app`
-   - Kopieer de **Client ID**. Dit is `GOOGLE_CLIENT_ID`. (Het client secret heb je niet nodig.)
-
-### 3. App publiceren op Cloud Run
-
-1. **Cloud Run → Deploy container → Service → "Continuously deploy from a repository"**
-   → koppel GitHub en kies deze repository, branch `main`, build type **Dockerfile**.
-2. Regio: **europe-west4 (Nederland)**.
-3. Authentication: **Allow unauthenticated invocations** (de app regelt zelf het inloggen).
-4. Minimum instances `0`, maximum `1`, geheugen `512 MiB`.
-5. **Variables & Secrets** → zet:
-
-   | Naam | Waarde |
-   |---|---|
-   | `MONGO_URL` | uit stap 1 (als *Secret*) |
-   | `DB_NAME` | `huishoudboekje` |
-   | `JWT_SECRET` | willekeurige tekst van 48+ tekens (als *Secret*) — maak die met `python3 -c "import secrets;print(secrets.token_urlsafe(48))"` of een wachtwoordgenerator |
-   | `GOOGLE_CLIENT_ID` | uit stap 2.4 |
-   | `ALLOWED_EMAILS` | jouw Gmail-adres |
-   | `APP_URL` | het Cloud Run-adres, zonder `/` aan het eind |
-
-6. Deploy. Na de eerste keer: vul `GOOGLE_CLIENT_ID` en `APP_URL` in en deploy opnieuw
-   (*Edit & deploy new revision*).
-
-Elke `git push` naar `main` bouwt en publiceert daarna automatisch een nieuwe versie.
-
-### 4. Eerste keer inloggen en je vrouw uitnodigen
-
-1. Open het Cloud Run-adres → **Inloggen met Google**.
-2. Maak je huishouden aan.
-3. **Instellingen → Partner uitnodigen** → haar Gmail-adres → kopieer de link en stuur die
-   (bijv. via WhatsApp). Stel je `RESEND_API_KEY` en `EMAIL_FROM` in, dan gaat er ook een e-mail uit.
-4. Zij opent de link en logt in met **dat** Google-account. Ze komt automatisch in het huishouden.
-   De link werkt één keer, alleen voor dat e-mailadres, en verloopt na 14 dagen.
-
-### 5. Gegevens overzetten uit de oude Emergent-app
-
-Zolang de oude app nog draait:
-
-```bash
-pip install requests
-python tools/export_from_emergent.py
+```
+frontend/                  de app (React + Tailwind + shadcn/ui)
+  src/lib/calc.js          ALLE berekeningen (getest: calc.test.js)
+  src/lib/api.js           "API" in de browser: dezelfde routes als vroeger, nu via Firestore
+  src/lib/store/           opslag: Firestore of geheugen (demo)
+  src/lib/demoSeed.js      voorbeeldgegevens voor de demo
+firestore.rules            wie mag wat — de enige echte toegangscontrole
+firestore-tests/           tests van de beveiligingsregels
+.github/workflows/         tests bij elke push; publiceren bij push naar main
 ```
 
-Dit maakt een `backup-emergent-….json`. Zet die terug via **Instellingen → Back-up terugzetten**.
-Bijlagen gaan niet mee; die upload je opnieuw. Verwijder het back-upbestand daarna.
+---
 
-**Zet daarna de oude Emergent-app uit.** Het wachtwoord ervan stond in de oude code.
+## Eerst bekijken: demo (geen accounts nodig)
+
+- **Op GitHub:** Code → Codespaces → Create codespace. De demo start vanzelf.
+- **Lokaal:** `cd frontend && yarn install && yarn start:demo`
+
+Log in als Robeson of Miraja. De gegevens staan alleen in je browsertabblad.
 
 ---
 
-## Back-ups
+## In gebruik nemen (eenmalig, ±30 minuten)
 
-**Instellingen → Back-up downloaden** geeft een JSON-bestand met alle gegevens (zonder bijlagen).
-Doe dit maandelijks en bewaar het op een veilige plek. Atlas M0 maakt zelf geen back-ups.
+### 1. Firebase-project aanmaken
+1. Ga naar <https://console.firebase.google.com> → **Project toevoegen**, bijv. `huishoudboekje`.
+   Google Analytics: **uit**.
+2. **Build → Firestore Database → Create database**
+   - locatie: **eur3 (Europe)** of **europe-west4 (Nederland)**. Dit kun je later niet wijzigen.
+   - start in **production mode**.
+3. **Build → Authentication → Get started → Sign-in method → Google → Enable**
+   - kies je e-mailadres als ondersteuningsadres.
+4. **Toegangslijst:** ga naar Firestore → **Start collection**
+   - Collection ID: `config` → Document ID: `access`
+   - Veld: `allowed_emails`, type **array**, met één waarde: jouw Gmail-adres in kleine letters.
 
-## Lokaal ontwikkelen
+   Alleen wie op deze lijst staat, kan een huishouden aanmaken. Je vrouw hoeft er niet op;
+   zij komt binnen via een uitnodiging.
+
+### 2. App registreren
+**Projectinstellingen (tandwiel) → Your apps → Web (`</>`)** → naam `Huishoudboekje` →
+vink **Firebase Hosting** aan → Register. De configuratie die je ziet hoef je niet te kopiëren:
+Firebase Hosting levert die automatisch aan de app.
+
+### 3. Sleutel voor automatisch publiceren
+1. Ga in de Firebase-console naar **Projectinstellingen → Service accounts → Manage service account
+   permissions**. Je komt dan in Google Cloud terecht.
+2. **Create service account**, naam `github-deploy`, rollen:
+   - **Firebase Admin**
+   - **Service Usage Consumer**
+3. Open het account → **Keys → Add key → JSON**. Er wordt een bestand gedownload.
+   **Dit is een geheim:** deel het met niemand, ook niet in een chat.
+
+### 4. GitHub koppelen
+In je repository op GitHub: **Settings → Secrets and variables → Actions**
+- tabblad **Secrets** → *New repository secret*:
+  - `FIREBASE_SERVICE_ACCOUNT` = de volledige inhoud van het JSON-bestand.
+  - Verwijder het bestand daarna van je computer.
+- tabblad **Variables** → *New repository variable*:
+  - `FIREBASE_PROJECT_ID` = je project-ID, bijv. `huishoudboekje-1a2b3`.
+
+Daarna publiceert elke push naar `main` automatisch: eerst draaien de tests, dan wordt de app gebouwd
+en gaan app en beveiligingsregels online. Bekijk de voortgang onder het tabblad **Actions**.
+De eerste keer start je hem handmatig: Actions → *Publiceren (Firebase)* → *Run workflow*.
+
+### 5. Eerste keer inloggen
+1. Open `https://<project-id>.web.app` → **Inloggen met Google**.
+2. Maak het huishouden aan.
+3. **Instellingen → Partner uitnodigen** → haar Gmail-adres → stuur haar de link.
+   Zij logt in met **dat** Google-account en zit er direct in. De uitnodiging is 14 dagen geldig.
+4. **Gegevens overzetten** uit de oude app: draai `tools/export_from_emergent.py` (zie het
+   bestand) en zet de back-up terug via **Instellingen → Back-up terugzetten**.
+
+---
+
+## 6. Naar de Google Play Store (als alles werkt)
+
+De app wordt verpakt als **Trusted Web Activity**: een echte Android-app die je website toont
+zonder adresbalk. Updates van de website zitten er direct in.
+
+1. Ga naar <https://www.pwabuilder.com>, vul `https://<project-id>.web.app` in → **Package for stores
+   → Android**.
+   - package-ID: bijv. `nl.constantine.huishoudboekje`
+   - Bewaar de **signing key** (`.keystore` + wachtwoorden) veilig. Zonder die sleutel kun je nooit
+     meer een update uitbrengen.
+2. Je krijgt een zip met een `.aab`-bestand en `assetlinks.json`.
+   - Zet `assetlinks.json` in `frontend/public/.well-known/assetlinks.json` en push.
+   - Daardoor verdwijnt de adresbalk in de app.
+3. <https://play.google.com/console> → ontwikkelaarsaccount (eenmalig $25) → **Create app**.
+4. Kies **Testing → Internal testing**:
+   - upload het `.aab`-bestand
+   - voeg jouw en haar Gmail toe als testers
+   - deel de testlink
+
+   Interne tests hebben geen review-wachttijd en geen eis van 12 testers. Voor jullie tweeën is dit
+   genoeg; publiek publiceren is niet nodig.
+5. Wil je later toch publiek gaan, dan heb je nodig:
+   - een privacyverklaring
+   - een manier om je account en gegevens te verwijderen (de eigenaar kan het huishouden nu al verwijderen)
+   - 14 dagen gesloten test met 12 testers
+
+**iPhone:** open de site in Safari → Deel → **Zet op beginscherm**. Dat werkt zonder App Store.
+
+---
+
+## Ontwikkelen en testen
 
 ```bash
-# backend
-cd backend
-cp .env.example .env        # vul in; COOKIE_SECURE=false en CORS_ORIGINS=http://localhost:3000
-pip install -r requirements-dev.txt
-uvicorn server:app --reload --port 8001
-
-# frontend (andere terminal)
 cd frontend
 yarn install
-yarn start                  # http://localhost:3000, /api wordt doorgestuurd naar :8001
+yarn start:demo          # demo, zonder Firebase
+CI=true yarn test        # rekenregels (vaste uitkomsten uit Excel v5)
+yarn build               # productie-build
+
+# Echte Firebase lokaal: zet in frontend/.env.local
+#   REACT_APP_FIREBASE_API_KEY=…  REACT_APP_FIREBASE_AUTH_DOMAIN=…
+#   REACT_APP_FIREBASE_PROJECT_ID=…  REACT_APP_FIREBASE_APP_ID=…
+# en voeg localhost toe bij Authentication → Settings → Authorized domains.
+
+# Beveiligingsregels testen (vereist Java 21):
+cd .. && npm install && npm run test:rules
 ```
 
-Voeg `http://localhost:3000` toe als *Authorized JavaScript origin* bij je OAuth-client.
-
-## Tests
-
-```bash
-cd backend
-pip install -r requirements-dev.txt
-pytest
-```
-
-- `tests/test_calc.py`: de rekenregels, getoetst aan vaste uitkomsten uit ons Excel-bestand (v5).
-  Ook de bouwdepot-scenario's die in de Emergent-versie fout gingen.
-- `tests/test_api.py`: toegang, uitnodigingen, afscherming tussen huishoudens, bijlagen en back-up.
-
-Draai de tests vóór elke wijziging aan `calc.py`. Een rood testresultaat betekent dat er iets
-aan de sommen is veranderd.
+GitHub Actions draait bij elke push: de rekentests, beide builds en de regeltests in de
+Firestore-emulator. **Een rode test betekent: niet publiceren.**
 
 ## Beveiliging in het kort
 
-- Alleen Google-login; geen wachtwoorden in de app.
-- Toegang: e-mailadressen in `ALLOWED_EMAILS` + openstaande uitnodigingen + bestaande leden.
-- Sessie in `HttpOnly`/`Secure`/`SameSite=Lax`-cookies (12 uur, stil verlengd tot 30 dagen).
-- Elke API-aanroep controleert of je lid bent van het huishouden.
-- Bijlagen: alleen pdf/afbeeldingen, max. 10 MB, opgeslagen in de eigen database.
-- Geen analytics of externe scripts, behalve Google-login en Google Fonts.
+- **Inloggen:** alleen met Google. Een vreemd Google-account kan wel "inloggen", maar ziet niets:
+  de regels geven alleen leden toegang tot een huishouden en de gegevens daarin.
+- **Huishouden aanmaken:** alleen e-mailadressen in `config/access`.
+- **Lid worden:** alleen met een uitnodiging voor jouw e-mailadres die nog geldig is. Je kunt
+  jezelf daarbij alleen als "lid" toevoegen, niet als eigenaar en niet samen met anderen.
+- **Leden** mogen gegevens en instellingen wijzigen. Leden en uitnodigingen beheert alleen de
+  eigenaar.
+- **Bijlagen:** pdf of foto, max. 10 MB. Foto's worden automatisch verkleind. Ze worden in stukken
+  in Firestore bewaard, zodat er geen betaalde opslag nodig is.
+- **Geen** analytics, tracking of AI.
+- **Back-up:** download maandelijks via Instellingen. Firestore maakt op het gratis abonnement zelf
+  geen back-ups.
 
-**Deze repository moet privé blijven.** De tests bevatten onze echte bedragen.
+**Deze repository moet privé blijven.** De tests en de demo bevatten onze echte bedragen.

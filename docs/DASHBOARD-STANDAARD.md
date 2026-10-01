@@ -227,10 +227,10 @@ persoonlijke stapel dus niet over voor werkapps. Neem wel de look & feel en de w
 | | **A. Persoonlijk** (referentie) | **B. Werk: low-code** | **C. Werk: maatwerk** |
 |---|---|---|---|
 | Schermen | React + Tailwind + shadcn/ui + Recharts | Power Apps (canvas) | React + Tailwind + shadcn/ui |
-| Gegevens | MongoDB Atlas (EU) | SharePoint-lijsten / Dataverse | SharePoint / Dataverse via Graph |
-| Inloggen | Google Identity Services | M365 (automatisch) | Microsoft Entra ID (MSAL) |
-| Logica | FastAPI (`calc.py` + pytest) | Power Fx / Power Automate | API of Azure Functions |
-| Hosting | Google Cloud Run (NL) | Power Platform | Azure Static Web Apps (EU) |
+| Gegevens | Cloud Firestore (EU) + `firestore.rules` | SharePoint-lijsten / Dataverse | SharePoint / Dataverse via Graph |
+| Inloggen | Firebase Authentication (Google) | M365 (automatisch) | Microsoft Entra ID (MSAL) |
+| Logica | `calc.js` (pure functies + Jest-tests) | Power Fx / Power Automate | API of Azure Functions |
+| Hosting | Firebase Hosting (+ Play Store via TWA) | Power Platform | Azure Static Web Apps (EU) |
 
 **Look & feel in Power Apps (B):** zelfde kleuren (hex uit 2.2), `Lato` of `Segoe UI` als
 tekstlettertype, getallen rechts uitgelijnd, KPI-tegels als containers met afronding 12 en een rand
@@ -238,13 +238,16 @@ tekstlettertype, getallen rechts uitgelijnd, KPI-tegels als containers met afron
 
 **Structuur referentie-app (A):**
 ```
-backend/  server.py (API) · auth.py (login + toegang) · calc.py (alle sommen) · deps.py
-          storage.py · tests/ (test_calc.py met vaste uitkomsten, test_api.py toegang/isolatie)
-frontend/ src/pages/* (één bestand per scherm) · src/components/ui/* (shadcn)
-          src/lib/format.js (NL-opmaak) · src/lib/api.js (API-client + sessievernieuwing)
-tools/demo/  demo zonder accounts (Codespaces) — niet in productie
-Dockerfile   één container: gebouwde frontend + backend
+frontend/src/lib/calc.js     alle sommen (pure functies) + calc.test.js met vaste uitkomsten
+frontend/src/lib/api.js      routes in de browser → opslag (Firestore of demo-geheugen)
+frontend/src/pages/*         één bestand per scherm · src/components/ui/* (shadcn)
+frontend/src/lib/format.js   NL-opmaak
+firestore.rules              de echte toegangscontrole + firestore-tests/ (emulator)
+.github/workflows/           tests bij elke push, publiceren bij push naar main
 ```
+Zonder eigen server betekent: **de beveiligingsregels zijn de beveiliging.** Controles in de
+app-code zijn alleen voor nette foutmeldingen. Elke regel heeft een test die bewijst dat een
+vreemde, een verlopen uitnodiging en een lid dat eigenaar wil worden, worden tegengehouden.
 
 ---
 

@@ -1,14 +1,10 @@
 {
   "name": "Huishoudboekje demo",
-  "image": "mcr.microsoft.com/devcontainers/python:3.11",
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": { "version": "22" }
-  },
-  "postCreateCommand": "pip install -r backend/requirements-dev.txt && cd frontend && yarn install --non-interactive && yarn build",
-  "postAttachCommand": "python tools/demo/demo_server.py",
-  "forwardPorts": [8000],
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
+  "postCreateCommand": "cd frontend && yarn install --non-interactive",
+  "postAttachCommand": "cd frontend && BROWSER=none yarn start:demo",
+  "forwardPorts": [3000],
   "portsAttributes": {
-    "8000": { "label": "Huishoudboekje demo", "onAutoForward": "openBrowser" }
-  },
-  "hostRequirements": { "memory": "4gb" }
+    "3000": { "label": "Huishoudboekje demo", "onAutoForward": "openBrowser" }
+  }
 }

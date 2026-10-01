@@ -1,0 +1,14 @@
+{
+  "name": "huishoudboekje-firebase",
+  "private": true,
+  "description": "Firebase-configuratie en tests van de beveiligingsregels. De app zelf staat in frontend/.",
+  "scripts": {
+    "test:rules": "firebase emulators:exec --only firestore --project demo-huishoudboekje \"node --test firestore-tests/\"",
+    "deploy": "cd frontend && yarn build && cd .. && firebase deploy --only hosting,firestore:rules"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "firebase": "^12.19.0",
+    "firebase-tools": "^15.32.1"
+  }
+}

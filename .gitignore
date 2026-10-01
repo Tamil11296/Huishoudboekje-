@@ -21,3 +21,8 @@ __pycache__/
 
 # back-ups met financiële gegevens
 backup-*.json
+frontend/build-demo/
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log

@@ -1,6 +1,7 @@
 import React from "react";
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { isDemo } from "@/lib/backend";
 import { Toaster } from "sonner";
 import { AppProvider, useApp } from "@/context/AppContext";
 import Login from "@/pages/Login";
@@ -116,14 +117,17 @@ function AppRouter() {
   );
 }
 
+// De demo draait ook als losse pagina (bijv. in een submap); daar werkt alleen hash-routing.
+const Router = isDemo() ? HashRouter : BrowserRouter;
+
 function App() {
   return (
     <div className="App">
       <AppProvider>
-        <BrowserRouter>
+        <Router>
           <AppRouter />
           <Toaster position="top-right" richColors />
-        </BrowserRouter>
+        </Router>
       </AppProvider>
     </div>
   );

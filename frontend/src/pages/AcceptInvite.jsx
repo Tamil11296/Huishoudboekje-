@@ -15,8 +15,11 @@ export default function AcceptInvite() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    api.get(`/invites/${token}`).then(({ data }) => setInvite(data)).catch(() => setInvite(false));
-  }, [token]);
+    api.get(`/invites/${token}`).then(({ data }) => {
+      if (data.already_member) { setCurrentId(token); navigate("/", { replace: true }); return; }
+      setInvite(data);
+    }).catch(() => setInvite(false));
+  }, [token, user, navigate, setCurrentId]);
 
   const accept = async () => {
     if (!user) {

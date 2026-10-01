@@ -1,0 +1,36 @@
+name: Publiceren (Firebase)
+
+# Publiceert de app en de beveiligingsregels bij elke push naar main.
+# Vereist: repository-secret FIREBASE_SERVICE_ACCOUNT (JSON-sleutel) en
+# repository-variabele FIREBASE_PROJECT_ID. Zie README, stap 4.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    if: ${{ vars.FIREBASE_PROJECT_ID != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - name: Testen en bouwen
+        working-directory: frontend
+        run: |
+          yarn install --frozen-lockfile --non-interactive
+          CI=true yarn test --watchAll=false
+          yarn build
+      - name: Publiceren
+        env:
+          SA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          npx --yes firebase-tools@15 deploy --only hosting,firestore:rules \
+            --project "${{ vars.FIREBASE_PROJECT_ID }}" --non-interactive
+          rm -f "$RUNNER_TEMP/sa.json"

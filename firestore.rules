@@ -1,0 +1,115 @@
+rules_version = '2';
+
+// Beveiliging van Huishoudboekje. Dit is de ENIGE echte toegangscontrole: alles wat de app
+// doet, gaat via deze regels. Wijzig alleen samen met de tests in firestore-tests/.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function householdData(hid) {
+      return get(/databases/$(database)/documents/households/$(hid)).data;
+    }
+    function isMember(hid) {
+      return signedIn() && request.auth.uid in householdData(hid).member_ids;
+    }
+    function isOwner(hid) {
+      return signedIn() && householdData(hid).owner_id == request.auth.uid;
+    }
+    // Toegangslijst: alleen wie hier staat mag een huishouden aanmaken.
+    // Beheer: Firebase-console > Firestore > config/access, veld allowed_emails (array).
+    function allowedCreator() {
+      let path = /databases/$(database)/documents/config/access;
+      return signedIn() && exists(path) && myEmail() in get(path).data.allowed_emails;
+    }
+
+    match /config/access {
+      allow read: if signedIn() && myEmail() in resource.data.allowed_emails;
+      allow write: if false; // alleen via de Firebase-console
+    }
+
+    match /households/{hid} {
+      function settingsKeys() {
+        return ['name', 'split_rule', 'dashboard_year', 'quote_statuses', 'quick_presets', 'persons', 'categories'];
+      }
+      function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+      // Uitgenodigde mag het huishouden (alleen dit document, geen gegevens) zien om lid te worden.
+      allow read: if signedIn() && (
+        request.auth.uid in resource.data.member_ids || myEmail() in resource.data.invited_list);
+
+      allow create: if allowedCreator()
+        && request.resource.data.household_id == hid
+        && request.resource.data.owner_id == request.auth.uid
+        && request.resource.data.member_ids == [request.auth.uid]
+        && request.resource.data.invited_list.size() == 0
+        && request.resource.data.invites.size() == 0;
+
+      // Lid: alleen instellingen. Eigenaar: ook leden en uitnodigingen, nooit de eigenaar zelf.
+      allow update: if (
+          signedIn() && request.auth.uid in resource.data.member_ids
+          && changed().hasOnly(settingsKeys())
+        ) || (
+          signedIn() && resource.data.owner_id == request.auth.uid
+          && changed().hasOnly(settingsKeys().concat(['members', 'member_ids', 'invites', 'invited_list']))
+          && request.auth.uid in request.resource.data.member_ids
+        ) || joinByInvite();
+
+      allow delete: if signedIn() && resource.data.owner_id == request.auth.uid;
+
+      // Lid worden met een geldige uitnodiging: alleen jezelf toevoegen, als 'member',
+      // en je eigen uitnodiging opruimen. Verder verandert er niets.
+      function joinByInvite() {
+        let email = myEmail();
+        let uid = request.auth.uid;
+        let before = resource.data;
+        let after = request.resource.data;
+        let added = after.members[after.members.size() - 1];
+        return signedIn()
+          && email in before.invited_list
+          && email in before.invites
+          && before.invites[email].expires_at > request.time
+          && !(uid in before.member_ids)
+          && changed().hasOnly(['member_ids', 'members', 'invites', 'invited_list'])
+          && after.member_ids == before.member_ids.concat([uid])
+          && after.members.size() == before.members.size() + 1
+          && after.members.hasAll(before.members)
+          && added.keys().hasOnly(['user_id', 'email', 'name', 'role'])
+          && added.user_id == uid && added.email == email && added.role == 'member'
+          && after.invited_list == before.invited_list.removeAll([email])
+          && after.invites.keys().toSet() == before.invites.keys().toSet().difference([email].toSet());
+      }
+
+      // Gegevens van het huishouden: alleen leden.
+      match /{coll}/{docId} {
+        function dataColl() {
+          return coll in ['incomes', 'fixed_expenses', 'variable_expenses', 'bouwdepots', 'bouwposten',
+                          'invoices', 'pots', 'projects', 'project_items'];
+        }
+        allow read: if isMember(hid) && (dataColl() || coll in ['change_log', 'attachments', 'attachment_chunks']);
+
+        allow create, update: if isMember(hid) && dataColl()
+          && request.resource.data.household_id == hid;
+        allow delete: if isMember(hid) && dataColl();
+
+        // Logboek: toevoegen mag elk lid, aanpassen niemand, opruimen alleen de eigenaar.
+        allow create: if isMember(hid) && coll == 'change_log'
+          && request.resource.data.user_id == request.auth.uid;
+        allow delete: if isOwner(hid) && coll == 'change_log';
+
+        // Bijlagen: metadata + stukken van max. ~700 kB tekst per document.
+        allow create, update, delete: if isMember(hid) && coll == 'attachments';
+        allow create, update: if isMember(hid) && coll == 'attachment_chunks'
+          && request.resource.data.data is string && request.resource.data.data.size() <= 720000;
+        allow delete: if isMember(hid) && coll == 'attachment_chunks';
+      }
+    }
+
+    // Al het andere: dicht.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

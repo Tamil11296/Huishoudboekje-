@@ -1,0 +1,411 @@
+{
+"FIXED": [
+[
+"Hypotheek/huur",
+"post 1",
+2333.03,
+"maandelijks",
+"2026-10-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 2",
+25.53,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Overig",
+"post 3",
+9.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Energie",
+"post 4",
+144.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 5",
+88.89,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 6",
+20.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 7",
+4.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 8",
+19.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 9",
+7.16,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 10",
+51.26,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Water",
+"post 11",
+35.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 12",
+38.17,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 13",
+42.5,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 14",
+17.67,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 15",
+13.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Vervoer",
+"post 16",
+39.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 17",
+140.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 18",
+163.4,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 19",
+46.07,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 20",
+10.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 21",
+32.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Overig",
+"post 22",
+65.0,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 23",
+21.45,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 24",
+9.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 25",
+25.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 26",
+11.77,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 27",
+9.99,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 28",
+21.78,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Verzekeringen",
+"post 29",
+20.41,
+"maandelijks",
+"2026-01-01",
+null,
+"R"
+],
+[
+"Abonnementen",
+"post 30",
+27.5,
+"maandelijks",
+"2026-01-01",
+null,
+"M"
+],
+[
+"Verzekeringen",
+"post 31",
+45.55,
+"maandelijks",
+"2026-01-01",
+null,
+"M"
+],
+[
+"Verzekeringen",
+"post 32",
+114.87,
+"maandelijks",
+"2026-01-01",
+null,
+"M"
+],
+[
+"Abonnementen",
+"post 33",
+4.8,
+"maandelijks",
+"2026-01-01",
+null,
+"M"
+],
+[
+"Abonnementen",
+"post 34",
+14.99,
+"jaarlijks",
+"2026-03-18",
+null,
+"M"
+],
+[
+"Verzekeringen",
+"post 35",
+218.52,
+"jaarlijks",
+"2026-01-26",
+null,
+"R"
+],
+[
+"Boodschappen",
+"post 36",
+900.0,
+"maandelijks",
+"2026-09-01",
+null,
+"M"
+],
+[
+"Sparen",
+"post 37",
+200.0,
+"maandelijks",
+"2026-09-01",
+null,
+"R"
+],
+[
+"Sparen",
+"post 38",
+500.0,
+"maandelijks",
+"2026-09-01",
+null,
+"M"
+],
+[
+"Kleding",
+"post 39",
+350.0,
+"maandelijks",
+"2026-09-01",
+null,
+"M"
+],
+[
+"Kinderen",
+"post 40",
+200.0,
+"maandelijks",
+"2026-09-01",
+null,
+"M"
+],
+[
+"Uit eten/vrije tijd",
+"post 41",
+100.0,
+"maandelijks",
+"2026-09-01",
+null,
+"M"
+],
+[
+"Hypotheek/huur",
+"post 42",
+1503.67,
+"maandelijks",
+"2026-01-01",
+"2026-09-30",
+"R"
+],
+[
+"Abonnementen",
+"post 43",
+967.47,
+"maandelijks",
+"2026-01-01",
+"2026-10-31",
+"M"
+]
+],
+"INCOMES": [
+[
+"R",
+4237.76,
+"2026-01-01"
+],
+[
+"M",
+3837.98,
+"2026-01-01"
+]
+],
+"VARIABLE": [
+[
+"Vervoer",
+40.0,
+"2026-09",
+"M"
+]
+]
+}

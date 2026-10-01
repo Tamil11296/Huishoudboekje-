@@ -10,6 +10,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useApp } from "@/context/AppContext";
+import { openFile } from "@/lib/api";
 
 function Field({ label, children }) {
   return <div className="space-y-1.5"><Label>{label}</Label>{children}</div>;
@@ -127,7 +128,7 @@ export default function InvoiceDialog({ open, onOpenChange, initial, offertes, p
             <Label>{t("attachments")}</Label>
             {atts.map((a) => (
               <div key={a.id} className="flex items-center justify-between text-sm rounded-lg border border-border px-3 py-1.5" data-testid={`existing-att-${a.id}`}>
-                <a href={`${apiBase}/api/households/${currentId}/invoices/${initial?.invoice_id}/attachment/${a.id}`} target="_blank" rel="noreferrer" className="truncate text-emerald-700 dark:text-emerald-400 hover:underline">{a.filename}</a>
+                <button type="button" onClick={() => openFile(`/households/${currentId}/invoices/${initial?.invoice_id}/attachment/${a.id}`).catch(() => {})} className="truncate text-left text-emerald-700 dark:text-emerald-400 hover:underline">{a.filename}</button>
                 <button type="button" className="text-rose-600 shrink-0 ml-2" onClick={() => removeExisting(a.id)} data-testid={`del-att-${a.id}`}>✕</button>
               </div>
             ))}
